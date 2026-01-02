@@ -526,21 +526,21 @@ export default function App() {
             
             {/* FULL SCREEN BATTLE COMMAND OVERLAY */}
             {isSetupOpen && (
-              <div className="fixed inset-0 z-[100] bg-[#05090f]/95 backdrop-blur-xl flex flex-col items-center justify-center p-4 animate-slide-in overflow-y-auto">
-                 <div className="w-full max-w-2xl bg-[#0a1a2f] border border-[#dcb06b] clip-corner-md relative shadow-[0_0_100px_rgba(0,0,0,0.8)]">
+              <div className="fixed inset-0 z-[100] bg-[#05090f]/95 backdrop-blur-xl flex items-center justify-center p-2 md:p-4 animate-slide-in">
+                 <div className="w-full max-w-2xl bg-[#0a1a2f] border border-[#dcb06b] clip-corner-md relative shadow-[0_0_100px_rgba(0,0,0,0.8)] max-h-[95vh] flex flex-col">
                     
                     {/* Header */}
-                    <div className="flex items-center justify-between p-6 border-b border-[#1e3a5f] bg-[#05090f]/50">
-                       <h2 className="text-[#dcb06b] font-cinzel font-black text-xl tracking-[0.2em] flex items-center gap-3">
-                          <div className="w-2 h-8 bg-[#dcb06b]"></div>
+                    <div className="flex items-center justify-between p-4 md:p-6 border-b border-[#1e3a5f] bg-[#05090f]/50 shrink-0">
+                       <h2 className="text-[#dcb06b] font-cinzel font-black text-lg md:text-xl tracking-[0.2em] flex items-center gap-3">
+                          <div className="w-2 h-6 md:h-8 bg-[#dcb06b]"></div>
                           BATTLE CONFIGURATION
                        </h2>
                        <button onClick={() => setIsSetupOpen(false)} className="text-[#4a5f78] hover:text-white transition-colors">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 md:h-8 md:w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                        </button>
                     </div>
 
-                    <div className="p-8 space-y-8">
+                    <div className="p-4 md:p-8 space-y-6 md:space-y-8 overflow-y-auto custom-scrollbar">
                         
                         {/* INTEGRATED ROOM ID CARD */}
                         {isBracketMode ? (
@@ -578,7 +578,7 @@ export default function App() {
                                   value={roomId} 
                                   onChange={(e) => setRoomId(e.target.value.replace(/\D/g,'').slice(0,4))} 
                                   placeholder="0000" 
-                                  className={`relative z-10 bg-black/40 border border-[#1e3a5f] p-4 text-5xl font-orbitron font-black w-full text-center focus:outline-none tracking-[0.4em] transition-all duration-300 clip-corner-sm
+                                  className={`relative z-10 bg-black/40 border border-[#1e3a5f] p-4 text-3xl md:text-5xl font-orbitron font-black w-full text-center focus:outline-none tracking-[0.4em] transition-all duration-300 clip-corner-sm
                                     ${roomId ? 'text-white border-[#dcb06b] shadow-[0_0_15px_rgba(220,176,107,0.2)] animate-[chromatic_0.2s_infinite]' : 'text-[#4a5f78] opacity-60'}
                                     placeholder-[#1e3a5f]`}
                                 />

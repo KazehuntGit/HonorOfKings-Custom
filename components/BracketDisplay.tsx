@@ -182,15 +182,9 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
   // --- START MATCH FLOW ---
 
   const startMatchFlow = (idx: number) => {
-    const m = allMatches.find(m => m.id === idx);
-    if (m && !m.teamB) {
-        // BYE Round - Advance automatically
-        setScores(prev => ({ ...prev, [`${idx}-A`]: 1, [`${idx}-B`]: 0 }));
-        return;
-    }
-
     setCurrentMatchIdx(idx);
 
+    const m = allMatches.find(m => m.id === idx);
     const numTeams = match.teams.length;
     let shouldEnableRolling = false;
 
@@ -208,27 +202,20 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
     // Determine target phase
     if (!shouldEnableRolling || completedReveals.has(idx)) {
          // Immediate "Skip" logic simulation - Fast Forward
-         const allCards = new Set<string>();
-         ROLES_ORDER.forEach(r => { 
-             allCards.add(`m${idx}-A-${r}`); 
-             allCards.add(`m${idx}-B-${r}`); 
-         });
-         setRevealedSlots(allCards);
-         setCurrentRoleIdx(ROLES_ORDER.length - 1);
-         setCompletedReveals(prev => new Set(prev).add(idx));
-         
-         // Do a background fill if needed to ensure data consistency
-         // With new logic, globalAssignments is already filled, so this might just be a safety check
-         handleSkipAll(idx, true); // True = background mode
-         
+         handleSkipAll(idx, true); 
          setPhase('REVEAL');
-
     } else {
         // First time Reveal
         setRevealedSlots(new Set());
         setCurrentRoleIdx(-1);
         setPhase('REVEAL');
     }
+  };
+
+  const handleByeCompletion = () => {
+     // Auto-win for Bye rounds after reveal
+     setScores(prev => ({ ...prev, [`${currentMatchIdx}-A`]: 1, [`${currentMatchIdx}-B`]: 0 }));
+     setPhase('OVERVIEW');
   };
 
   const handleEvaluationComplete = (mvpId?: string, ratings?: Record<string, number>) => {
@@ -297,6 +284,8 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
       const isDone = sA > 0 || sB > 0;
       const isBye = !m.teamB;
       const isGrandFinal = m.label === 'GRAND FINAL';
+      const numTeams = match.teams.length;
+      
       return (
         <div className={`w-80 bg-[#0a1a2f]/95 ${isGrandFinal ? 'border-2 border-[#dcb06b] shadow-[0_0_40px_rgba(220,176,107,0.4)]' : 'border border-[#1e3a5f]'} clip-corner-md p-0 relative transition-all duration-300 group hover:bg-[#0f223d] hover:border-[#dcb06b]/50 z-10`}>
             <div className={`flex justify-between items-center p-3 ${isGrandFinal ? 'bg-[#dcb06b]/30' : 'bg-[#05090f]/90'} border-b border-[#1e3a5f]`}>
@@ -326,9 +315,8 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
             </div>
             <div className="p-3 bg-black/40 border-t border-[#1e3a5f] flex items-center gap-3">
                 {isBye ? (
-                    <div className="flex-1 flex items-center justify-between">
-                        <span className="text-[8px] text-[#dcb06b] font-black uppercase tracking-widest animate-pulse">BYE ROUND</span>
-                        {!isDone && <Button onClick={() => startMatchFlow(m.id)} size="sm" className="h-[28px] text-[8px] px-4 bg-[#dcb06b]">ADVANCE</Button>}
+                    <div className="flex-1 flex items-center justify-center">
+                        <span className="text-[8px] text-[#dcb06b]/50 font-black uppercase tracking-widest">AUTO ADVANCE</span>
                     </div>
                 ) : (
                     <>
@@ -343,7 +331,8 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
         </div>
       );
   };
-
+  
+// ... rest of the file ...
   const activeMatchData = useMemo(() => {
     const data = allMatches.find(m => m.id === currentMatchIdx);
     if (!data) return undefined;
@@ -366,13 +355,41 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
 
   const handleNextReveal = () => {
     if (!activeMatchData) return;
-    const nextRoleIdx = currentRoleIdx + 1;
-    if (nextRoleIdx >= ROLES_ORDER.length) return;
     
-    const role = ROLES_ORDER[nextRoleIdx];
-    const azureId = `m${currentMatchIdx}-A-${role}`;
-    const side = revealedSlots.has(azureId) ? 'crimson' : 'azure';
+    // Logic to find the next valid role/side combo
+    let targetRoleIdx = currentRoleIdx;
+    let targetSide: 'azure' | 'crimson' = 'azure'; // Default
     
+    // If starting fresh
+    if (targetRoleIdx === -1) {
+        targetRoleIdx = 0;
+        targetSide = 'azure';
+    } else {
+        const currentRole = ROLES_ORDER[targetRoleIdx];
+        const azureId = `m${currentMatchIdx}-A-${currentRole}`;
+        
+        // If Azure for current role is NOT revealed, target it
+        if (!revealedSlots.has(azureId)) {
+            targetSide = 'azure';
+        } else {
+            // Azure is revealed. Check if we need to reveal Crimson
+            const crimsonId = `m${currentMatchIdx}-B-${currentRole}`;
+            if (!revealedSlots.has(crimsonId)) {
+                targetSide = 'crimson';
+            } else {
+                 // Both revealed, move to next role Azure
+                 targetRoleIdx++;
+                 targetSide = 'azure';
+            }
+        }
+    }
+
+    if (targetRoleIdx >= ROLES_ORDER.length) return; // Done
+
+    const role = ROLES_ORDER[targetRoleIdx];
+    const side = targetSide;
+
+    // --- Proceed to reveal this slot ---
     const teamData = side === 'azure' ? activeMatchData.teamA : activeMatchData.teamB;
     const originalTeamIndex = match.teams.findIndex(t => t.name === teamData?.name);
     
@@ -419,9 +436,6 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
     const matchData = allMatches.find(m => m.id === forceMatchIdx);
     if (!matchData) return;
     
-    // NOTE: This modifies matchData for the Grand Final swap, but for assignment we need original team indices
-    // We must find the original team objects based on name from the bracket structure
-    
     const newAssignments: Record<string, string> = {};
     const usedIds = new Set(Object.values(globalAssignments));
     
@@ -450,7 +464,10 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
 
     if (!background) {
         const allCards = new Set<string>();
-        ROLES_ORDER.forEach(r => { allCards.add(`m${forceMatchIdx}-A-${r}`); allCards.add(`m${forceMatchIdx}-B-${r}`); });
+        ROLES_ORDER.forEach(r => { 
+            allCards.add(`m${forceMatchIdx}-A-${r}`); 
+            if (matchData.teamB) allCards.add(`m${forceMatchIdx}-B-${r}`); 
+        });
         setRevealedSlots(allCards);
         setCurrentRoleIdx(ROLES_ORDER.length - 1);
         setCompletedReveals(prev => new Set(prev).add(forceMatchIdx));
@@ -500,6 +517,8 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
         }
         const id = `m${currentMatchIdx}-${team === 'azure' ? 'A' : 'B'}-${role}`;
         setRevealedSlots(prev => new Set(prev).add(id));
+        
+        // Standard Match Logic Only (Bye support removed from reveal)
         if (team === 'crimson') {
             const nextIdx = currentRoleIdx + 1;
             setCurrentRoleIdx(nextIdx);
@@ -587,6 +606,20 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
   if (phase === 'CELEBRATION' && currentRoundWinner && activeMatchData) return <VictoryCelebration winner={currentRoundWinner} teamSlots={(currentRoundWinner === 'azure' ? activeMatchData.teamA?.slots : activeMatchData.teamB?.slots) || []} onDismiss={() => setPhase('EVALUATION')} />;
   if (phase === 'EVALUATION' && currentRoundWinner && activeMatchData) return <EvaluationScreen match={{ roomId: activeRoomId, azureTeam: activeMatchData.teamA?.slots || [], crimsonTeam: activeMatchData.teamB?.slots || [], isCoachMode: false, timestamp: Date.now() }} winner={currentRoundWinner} onComplete={handleEvaluationComplete} />;
 
+  // DETERMINE BUTTON TEXT FOR REVEAL PHASE
+  const getRevealButtonText = () => {
+     if (revealedSlots.size >= 10) return "INITIALIZE BATTLE";
+     
+     const nextRoleIdx = currentRoleIdx + 1;
+     // If we are at the end, default to Start/Initialize
+     if (nextRoleIdx >= ROLES_ORDER.length) return "INITIALIZE BATTLE";
+     
+     const nextRole = ROLES_ORDER[nextRoleIdx];
+     const azureRevealed = revealedSlots.has(`m${currentMatchIdx}-A-${nextRole}`);
+     
+     return azureRevealed ? `SELECT CRIMSON ${nextRole.replace(' Lane', '').toUpperCase()}` : `SELECT AZURE ${nextRole.replace(' Lane', '').toUpperCase()}`;
+  };
+
   return (
     <div className="fixed inset-0 z-[100] bg-[#05090f] overflow-x-auto overflow-y-auto font-inter">
       <ConfirmModal isOpen={showAbortConfirm} title="ABORT TOURNAMENT" message="Are you sure you want to end the tournament? All progress will be lost." onConfirm={onReset} onCancel={() => setShowAbortConfirm(false)} isDestructive={true} />
@@ -612,7 +645,15 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-20"><span className="text-[12rem] font-black italic text-[#dcb06b] font-orbitron select-none">VS</span></div>
                 <div className="space-y-4 relative z-10">{ROLES_ORDER.map((role) => <div key={role} className="grid grid-cols-2 gap-12 md:gap-32 items-center"><div>{renderPlayerCard(role, 'azure')}</div><div>{renderPlayerCard(role, 'crimson')}</div></div>)}</div>
             </div>
-            <div className="fixed bottom-0 left-0 right-0 p-8 z-50 flex justify-center items-end h-28 pointer-events-none"><div className="pointer-events-auto">{revealedSlots.size < 10 ? <button onClick={handleNextReveal} className="group relative px-16 h-16 bg-[#0a1a2f] border-2 border-[#dcb06b] clip-corner-md flex items-center justify-center text-[#dcb06b] font-cinzel font-bold text-base hover:bg-[#dcb06b] hover:text-[#05090f] transition-all duration-300 shadow-[0_0_30px_rgba(220,176,107,0.4)]">{revealedSlots.has(`m${currentMatchIdx}-A-${ROLES_ORDER[currentRoleIdx + 1]}`) ? `SELECT CRIMSON ${ROLES_ORDER[currentRoleIdx + 1].replace(' Lane', '').toUpperCase()}` : `SELECT AZURE ${ROLES_ORDER[currentRoleIdx + 1].replace(' Lane', '').toUpperCase()}`}</button> : <Button onClick={() => setPhase('TRANSITION')} size="lg" className="px-24 h-16 text-lg animate-pulse shadow-[0_0_40px_rgba(220,176,107,0.5)]">INITIALIZE BATTLE</Button>}</div></div>
+            <div className="fixed bottom-0 left-0 right-0 p-8 z-50 flex justify-center items-end h-28 pointer-events-none">
+                <div className="pointer-events-auto">
+                    {revealedSlots.size < 10 ? 
+                       <button onClick={handleNextReveal} className="group relative px-16 h-16 bg-[#0a1a2f] border-2 border-[#dcb06b] clip-corner-md flex items-center justify-center text-[#dcb06b] font-cinzel font-bold text-base hover:bg-[#dcb06b] hover:text-[#05090f] transition-all duration-300 shadow-[0_0_30px_rgba(220,176,107,0.4)]">{getRevealButtonText()}</button> 
+                       : 
+                       <Button onClick={() => setPhase('TRANSITION')} size="lg" className="px-24 h-16 text-lg animate-pulse shadow-[0_0_40px_rgba(220,176,107,0.5)]">INITIALIZE BATTLE</Button>
+                    }
+                </div>
+            </div>
         </div>
       )}
     </div>
