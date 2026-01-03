@@ -1,7 +1,8 @@
+
 import React, { useEffect, useState } from 'react';
 import { TeamSlot, Role } from '../types';
 import { Button } from './Button';
-import { RoleIcons } from '../constants';
+import { RoleIcons, ROLES_ORDER } from '../constants';
 
 interface PortalTransitionProps {
   onComplete: () => void;
@@ -16,8 +17,8 @@ export const PortalTransition: React.FC<PortalTransitionProps> = ({ onComplete, 
   useEffect(() => {
     // Sequence:
     // 0ms: Start (Empty)
-    // 100ms: Slide In (Stage 1)
-    // 800ms: Impact/Shake (Stage 2) - Rosters Fade In
+    // 100ms: Slide In (Stage 1) - Vertical Slide accelerating
+    // 800ms: Impact/Shake (Stage 2)
     
     const t1 = setTimeout(() => setStage(1), 100);
     const t2 = setTimeout(() => setStage(2), 800);
@@ -47,193 +48,236 @@ export const PortalTransition: React.FC<PortalTransitionProps> = ({ onComplete, 
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const renderTeamSection = (teamSlots: TeamSlot[], alignment: 'left' | 'right') => {
-      // Separate Coach from Players
-      const coachSlot = teamSlots.find(s => s.role === Role.COACH);
-      const playerSlots = teamSlots.filter(s => s.role !== Role.COACH);
+  const renderTeamGrid = (teamSlots: TeamSlot[], teamColor: 'cyan' | 'red') => {
+      const displaySlots = [...teamSlots].sort((a, b) => {
+          if (a.role === Role.COACH) return 1;
+          if (b.role === Role.COACH) return -1;
+          return ROLES_ORDER.indexOf(a.role) - ROLES_ORDER.indexOf(b.role);
+      });
 
-      const isRightAligned = alignment === 'right'; // Azure (Left Panel) aligns content to the right
+      const isCyan = teamColor === 'cyan';
+      const accentColor = isCyan ? '#00d2ff' : '#ef4444';
       
-      // Styling config based on side (Azure vs Crimson) - PLAYERS ONLY
-      const mainColor = isRightAligned ? '#00d2ff' : '#ef4444'; // Cyan vs Red
-      const borderColor = isRightAligned ? 'border-[#00d2ff]' : 'border-[#ef4444]';
-      const bgColor = isRightAligned ? 'bg-[#00d2ff]/10' : 'bg-[#ef4444]/10';
-      const textColor = isRightAligned ? 'text-[#00d2ff]' : 'text-[#ef4444]';
-      const gradient = isRightAligned 
-         ? 'bg-gradient-to-l from-[#00d2ff]/20 to-transparent' 
-         : 'bg-gradient-to-r from-[#ef4444]/20 to-transparent';
-
       return (
-        <div className={`flex flex-col ${isRightAligned ? 'items-end' : 'items-start'} relative`}>
-            
-            {/* COACH SECTION (TOP) */}
-            {coachSlot && (
-                <div className={`mb-6 relative flex flex-col ${isRightAligned ? 'items-end' : 'items-start'}`}>
-                    {/* Connecting Line from Coach to Players */}
-                    <div className={`
-                        absolute top-full w-[2px] h-full bg-gradient-to-b from-white via-white/50 to-transparent z-0
-                        ${isRightAligned ? 'right-8' : 'left-8'}
-                        ${stage >= 2 ? 'opacity-50' : 'opacity-0'} transition-opacity duration-1000
-                    `}></div>
-
+        <div className="grid grid-cols-5 gap-3 md:gap-6 w-full max-w-6xl mx-auto px-6 relative z-10">
+            {displaySlots.map((slot, idx) => {
+                const isCoach = slot.role === Role.COACH;
+                return (
                     <div 
+                        key={idx} 
                         className={`
-                            flex items-center gap-4 transition-all duration-700 transform relative z-10
-                            ${stage >= 2 ? 'translate-x-0 opacity-100' : (isRightAligned ? '-translate-x-10' : 'translate-x-10') + ' opacity-0'}
-                            ${!isRightAligned ? 'flex-row-reverse' : ''}
+                            relative flex flex-col items-center
+                            w-full aspect-[3/4]
+                            clip-corner-sm backdrop-blur-md
+                            border transition-all duration-500 transform group
+                            ${stage >= 2 ? 'opacity-100 scale-100 translate-y-0' : `opacity-0 scale-75 ${isCyan ? '-translate-y-10' : 'translate-y-10'}`}
+                            ${isCyan 
+                                ? 'bg-[#0a1a2f]/60 border-[#00d2ff]/30 shadow-[0_0_15px_rgba(0,210,255,0.1)]' 
+                                : 'bg-[#1a0505]/60 border-[#ef4444]/30 shadow-[0_0_15px_rgba(239,68,68,0.1)]'
+                            }
                         `}
+                        style={{ transitionDelay: `${900 + (idx * 50)}ms` }}
                     >
-                         {/* Name Card - WHITE THEME */}
-                         <div className={`
-                            bg-white/10 border-white/50 py-3 px-6 clip-corner-sm relative group overflow-hidden min-w-[220px] 
-                            ${isRightAligned ? 'text-right border-r-2' : 'text-left border-l-2'}
-                            shadow-[0_0_15px_rgba(255,255,255,0.3)]
-                         `}>
-                            <div className={`absolute inset-0 ${isRightAligned ? 'bg-gradient-to-l' : 'bg-gradient-to-r'} from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity`}></div>
-                            <span className="block text-[9px] uppercase tracking-widest text-white/70 mb-0.5 font-bold">Team Coach</span>
-                            <span className="relative z-10 text-white font-orbitron font-bold text-xl md:text-2xl drop-shadow-md tracking-wide">
-                              {coachSlot.player.name}
-                            </span>
-                         </div>
+                        {/* Inner Gradient Highlight */}
+                        <div className={`absolute inset-0 bg-gradient-to-b ${isCyan ? 'from-[#00d2ff]/10' : 'from-[#ef4444]/10'} to-transparent opacity-50`}></div>
 
-                         {/* Coach Icon */}
-                         <div className="relative">
-                           <div className="px-2 py-2 flex items-center justify-center bg-[#0a1a2f] border border-white text-white clip-corner-sm shadow-[0_0_15px_white] w-32 h-[3.5rem]">
-                              <div className="scale-90">{RoleIcons[Role.COACH]}</div>
-                           </div>
-                         </div>
-                    </div>
-                </div>
-            )}
+                        {/* Top Decoration Bar */}
+                        <div className={`w-full h-1 ${isCyan ? 'bg-[#00d2ff]' : 'bg-[#ef4444]'} opacity-70`}></div>
 
-            {/* PLAYERS SECTION */}
-            <div className={`space-y-4 ${coachSlot ? 'mt-2' : ''}`}>
-                {playerSlots.map((slot, idx) => (
-                    <div 
-                    key={idx} 
-                    className={`
-                        flex items-center gap-4 transition-all duration-500 transform
-                        ${stage >= 2 ? 'translate-x-0 opacity-100' : (isRightAligned ? '-translate-x-10' : 'translate-x-10') + ' opacity-0'}
-                        ${!isRightAligned ? 'flex-row-reverse' : ''}
-                    `}
-                    style={{ transitionDelay: `${800 + (idx * 100)}ms` }}
-                    >
-                        {/* Name Card */}
-                        <div className={`
-                            ${bgColor} ${isRightAligned ? 'border-r-2 pr-4 pl-8 text-right' : 'border-l-2 pl-4 pr-8 text-left'} 
-                            ${borderColor} py-2 clip-corner-sm relative group overflow-hidden min-w-[200px]
-                        `}>
-                            <div className={`absolute inset-0 ${gradient} opacity-0 group-hover:opacity-100 transition-opacity`}></div>
-                            <span className="relative z-10 text-white font-orbitron font-bold text-lg md:text-xl drop-shadow-md tracking-wide">
-                                {slot.player.name}
-                            </span>
-                        </div>
+                        {/* Content Container */}
+                        <div className="flex-1 flex flex-col items-center justify-center p-2 w-full relative z-10">
+                            {/* Role Icon - Glowing */}
+                            <div className={`
+                                mb-2 transform transition-transform duration-300 group-hover:scale-110 
+                                ${isCyan ? 'text-[#00d2ff] drop-shadow-[0_0_8px_rgba(0,210,255,0.6)]' : 'text-[#ef4444] drop-shadow-[0_0_8px_rgba(239,68,68,0.6)]'}
+                                opacity-90
+                            `}>
+                                <div className="scale-110 md:scale-125">
+                                   {RoleIcons[slot.role]}
+                                </div>
+                            </div>
 
-                        {/* Role Icon/Badge */}
-                        <div className="relative">
-                            <div className={`px-2 py-2 flex items-center justify-center bg-[#0a1a2f] border ${borderColor} ${textColor} clip-corner-sm shadow-[0_0_10px_currentColor] w-32`}>
-                                <div className="scale-75">{RoleIcons[slot.role]}</div>
+                            {/* Tech Lines Decoration */}
+                            <div className="w-full flex justify-between px-2 mb-2 opacity-30">
+                                <div className={`h-[1px] w-3 ${isCyan ? 'bg-cyan-400' : 'bg-red-500'}`}></div>
+                                <div className={`h-[1px] w-3 ${isCyan ? 'bg-cyan-400' : 'bg-red-500'}`}></div>
+                            </div>
+
+                            {/* Player Name */}
+                            <div className="w-full relative">
+                                <div className="absolute inset-0 bg-black/60 blur-sm"></div>
+                                <span className="relative z-10 block text-[9px] md:text-xs font-orbitron font-bold text-white truncate w-full text-center tracking-wider py-1">
+                                    {slot.player.name}
+                                </span>
                             </div>
                         </div>
+
+                        {/* Corner Accents */}
+                        <div className={`absolute bottom-0 left-0 w-2 h-2 border-b border-l ${isCyan ? 'border-[#00d2ff]' : 'border-[#ef4444]'}`}></div>
+                        <div className={`absolute bottom-0 right-0 w-2 h-2 border-b border-r ${isCyan ? 'border-[#00d2ff]' : 'border-[#ef4444]'}`}></div>
+                        
+                        {isCoach && (
+                            <div className="absolute top-2 right-2 text-[8px] font-black uppercase text-white bg-white/20 px-1 rounded">COACH</div>
+                        )}
                     </div>
-                ))}
-            </div>
+                );
+            })}
         </div>
       );
   };
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black flex items-center justify-center overflow-hidden font-inter">
+    <div className="fixed inset-0 z-[100] bg-[#05090f] flex flex-col items-center justify-center overflow-hidden font-inter select-none">
         
-        {/* Background Flash on Impact */}
+        {/* --- GLOBAL BACKGROUND EFFECTS --- */}
+        {/* Cyber Grid */}
+        <div className="absolute inset-0 opacity-20 pointer-events-none" 
+             style={{ backgroundImage: 'linear-gradient(#1e3a5f 1px, transparent 1px), linear-gradient(90deg, #1e3a5f 1px, transparent 1px)', backgroundSize: '40px 40px' }}>
+        </div>
+        {/* Vignette */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,#000000_90%)] z-0"></div>
+        
+        {/* Impact Flash */}
         <div className={`
-            absolute inset-0 bg-white pointer-events-none z-50
-            ${stage === 2 ? 'animate-[impact-flash_0.5s_ease-out_forwards]' : 'opacity-0'}
+            absolute inset-0 bg-white pointer-events-none z-[60] mix-blend-overlay
+            ${stage === 2 ? 'animate-[impact-flash_0.3s_ease-out_forwards]' : 'opacity-0'}
         `}></div>
 
-        {/* Shake Container */}
+
+        {/* --- MAIN ANIMATION CONTAINER --- */}
         <div className={`
-            absolute inset-0 flex items-center justify-center w-full h-full
-            ${stage === 2 ? 'animate-[clash-shake_0.5s_ease-in-out]' : ''}
-            transition-opacity duration-500
-            ${stage === 3 ? 'opacity-0' : 'opacity-100'}
+            absolute inset-0 flex flex-col w-full h-full z-10
+            ${stage === 2 ? 'animate-[clash-shake_0.4s_ease-in-out]' : ''}
+            transition-opacity duration-700
+            ${stage === 3 ? 'opacity-0 scale-105' : 'opacity-100 scale-100'}
         `}>
             
-            {/* LEFT SIDE - AZURE GOLEM */}
+            {/* --- TOP HALF (AZURE) --- */}
             <div className={`
-                absolute left-0 top-0 bottom-0 w-1/2 
-                bg-gradient-to-r from-[#0a1a2f] to-[#00d2ff]/30
-                flex flex-col items-end justify-center
-                border-r-4 border-[#00d2ff]
-                pr-8 md:pr-48
-                transform transition-all duration-700 ease-in
-                ${stage >= 1 ? 'translate-x-0' : '-translate-x-full'}
+                absolute top-0 left-0 right-0 h-[50vh]
+                bg-gradient-to-b from-[#0a1a2f] via-[#0a1a2f]/95 to-[#00d2ff]/10
+                flex flex-col items-center justify-end
+                transform transition-all duration-500 cubic-bezier(0.22, 1, 0.36, 1)
+                ${stage >= 1 ? 'translate-y-0' : '-translate-y-full'}
+                z-10 pb-16
             `}>
-                <div className="text-right w-full max-w-xl">
-                    <div className="text-[#00d2ff] font-cinzel font-black text-3xl md:text-5xl tracking-[0.1em] drop-shadow-[0_0_20px_#00d2ff] whitespace-nowrap mb-8 relative">
-                        AZURE GOLEM
-                        <div className="absolute -bottom-2 right-0 w-1/2 h-1 bg-[#00d2ff] shadow-[0_0_10px_#00d2ff]"></div>
-                    </div>
-                    
-                    {renderTeamSection(azureTeam, 'right')}
+                {/* Team Label */}
+                <div className="absolute top-[15%] flex flex-col items-center">
+                    <h2 className="text-4xl md:text-6xl font-cinzel font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-[#00d2ff] tracking-[0.2em] drop-shadow-[0_0_20px_rgba(0,210,255,0.5)]">
+                        AZURE
+                    </h2>
+                    <div className="text-[#00d2ff] text-xs font-orbitron tracking-[0.5em] opacity-70 mt-2">ALLIANCE</div>
                 </div>
+                
+                {/* Players */}
+                {renderTeamGrid(azureTeam, 'cyan')}
+                
+                {/* Border Glow Line */}
+                <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#00d2ff] shadow-[0_0_30px_#00d2ff] z-20"></div>
             </div>
 
-            {/* RIGHT SIDE - CRIMSON GOLEM */}
-            <div className={`
-                absolute right-0 top-0 bottom-0 w-1/2 
-                bg-gradient-to-l from-[#1a0505] to-[#ef4444]/30
-                flex flex-col items-start justify-center
-                border-l-4 border-[#ef4444]
-                pl-8 md:pl-48
-                transform transition-all duration-700 ease-in
-                ${stage >= 1 ? 'translate-x-0' : 'translate-x-full'}
-            `}>
-                <div className="text-left w-full max-w-xl">
-                    <div className="text-[#ef4444] font-cinzel font-black text-3xl md:text-5xl tracking-[0.1em] drop-shadow-[0_0_20px_#ef4444] whitespace-nowrap mb-8 relative">
-                        CRIMSON GOLEM
-                        <div className="absolute -bottom-2 left-0 w-1/2 h-1 bg-[#ef4444] shadow-[0_0_10px_#ef4444]"></div>
-                    </div>
 
-                    {renderTeamSection(crimsonTeam, 'left')}
-                </div>
+            {/* --- BOTTOM HALF (CRIMSON) --- */}
+            <div className={`
+                absolute bottom-0 left-0 right-0 h-[50vh] 
+                bg-gradient-to-t from-[#1a0505] via-[#1a0505]/95 to-[#ef4444]/10
+                flex flex-col items-center justify-start
+                transform transition-all duration-500 cubic-bezier(0.22, 1, 0.36, 1)
+                ${stage >= 1 ? 'translate-y-0' : 'translate-y-full'}
+                z-10 pt-16
+            `}>
+                 {/* Border Glow Line */}
+                 <div className="absolute top-0 left-0 right-0 h-[2px] bg-[#ef4444] shadow-[0_0_30px_#ef4444] z-20"></div>
+
+                 {/* Players */}
+                 {renderTeamGrid(crimsonTeam, 'red')}
+
+                 {/* Team Label */}
+                 <div className="absolute bottom-[25%] flex flex-col items-center">
+                     <div className="text-[#ef4444] text-xs font-orbitron tracking-[0.5em] opacity-70 mb-2">LEGION</div>
+                     <h2 className="text-4xl md:text-6xl font-cinzel font-black text-transparent bg-clip-text bg-gradient-to-b from-[#ef4444] to-[#7f1d1d] tracking-[0.2em] drop-shadow-[0_0_20px_rgba(239,68,68,0.5)]">
+                        CRIMSON
+                     </h2>
+                 </div>
             </div>
 
-            {/* CENTER VS & Loading State */}
+
+            {/* --- CENTER UI (VS) --- */}
             <div className={`
-                absolute z-40 flex flex-col items-center justify-center transform transition-all duration-300
+                absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[50]
+                flex items-center justify-center transform transition-all duration-300
                 ${stage >= 2 ? 'scale-100 opacity-100' : 'scale-0 opacity-0'}
             `}>
-                <div className="relative w-24 h-24 md:w-32 md:h-32 flex items-center justify-center mb-8">
-                    <div className="absolute inset-0 bg-[#dcb06b] rotate-45 animate-pulse"></div>
-                    <div className="absolute inset-1 bg-black rotate-45"></div>
-                    <span className="relative z-10 text-[#dcb06b] font-orbitron font-black text-4xl md:text-5xl italic">VS</span>
-                </div>
+                {/* Shockwave Ring */}
+                <div className={`absolute inset-0 border-2 border-[#dcb06b] rounded-full opacity-0 ${stage === 2 ? 'animate-[ping_1s_cubic-bezier(0,0,0.2,1)_infinite]' : ''}`}></div>
 
-                {/* Loading / Timer UI */}
-                <div className="flex flex-col items-center gap-2 mb-8 bg-black/50 p-4 rounded-lg backdrop-blur-sm border border-[#dcb06b]/30">
-                    <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 border-2 border-[#dcb06b] border-t-transparent rounded-full animate-spin"></div>
-                        <span className="text-[#dcb06b] text-xs font-orbitron tracking-widest uppercase animate-pulse">Match in Progress</span>
+                {/* Energy Core */}
+                <div className="relative w-24 h-24 md:w-32 md:h-32 flex items-center justify-center">
+                    {/* Rotating Diamond Back */}
+                    <div className="absolute inset-0 bg-[#05090f] rotate-45 border-2 border-[#dcb06b] shadow-[0_0_40px_rgba(220,176,107,0.5)] animate-[spin_8s_linear_infinite]"></div>
+                    {/* Static Diamond Front */}
+                    <div className="absolute inset-2 border border-[#dcb06b]/50 rotate-45 bg-black/40 backdrop-blur-sm"></div>
+                    
+                    {/* Text */}
+                    <span className="relative z-10 text-transparent bg-clip-text bg-gradient-to-br from-[#f3dcb1] to-[#dcb06b] font-orbitron font-black text-4xl md:text-5xl italic drop-shadow-sm pr-1 pt-1">
+                        VS
+                    </span>
+                    
+                    {/* Decorative Horizontal Lines */}
+                    <div className="absolute top-1/2 left-[-40px] w-10 h-[2px] bg-gradient-to-l from-[#dcb06b] to-transparent"></div>
+                    <div className="absolute top-1/2 right-[-40px] w-10 h-[2px] bg-gradient-to-r from-[#dcb06b] to-transparent"></div>
+                </div>
+            </div>
+
+
+            {/* --- HUD ELEMENTS --- */}
+            
+            {/* 1. Timer (Top Right HUD) */}
+            <div className={`
+                absolute top-8 right-8 z-[60]
+                transition-all duration-700 delay-500
+                ${stage >= 2 ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-10'}
+            `}>
+                <div className="relative bg-[#05090f]/90 border border-[#dcb06b]/40 px-6 py-2 clip-corner-sm shadow-[0_0_20px_rgba(0,0,0,0.8)] group">
+                     {/* HUD Decoration Lines */}
+                     <div className="absolute top-0 right-0 w-2 h-2 border-t border-r border-[#dcb06b]"></div>
+                     <div className="absolute bottom-0 left-0 w-2 h-2 border-b border-l border-[#dcb06b]"></div>
+                     
+                     <div className="flex items-center gap-2 mb-1 justify-end">
+                        <div className="w-1.5 h-1.5 bg-[#dcb06b] rounded-full animate-pulse shadow-[0_0_5px_#dcb06b]"></div>
+                        <span className="text-[#dcb06b] text-[10px] font-orbitron tracking-[0.2em] uppercase font-bold">SYSTEM READY</span>
                     </div>
-                    <div className="text-white font-mono text-2xl tracking-widest font-bold">
+                    <div className="text-white font-mono text-4xl font-bold tracking-widest leading-none text-right tabular-nums drop-shadow-md">
                        {formatTime(elapsedSeconds)}
                     </div>
                 </div>
+            </div>
 
-                <Button onClick={handleNext} className="px-8 border-[#dcb06b] shadow-[0_0_15px_#dcb06b] hover:scale-110">
+            {/* 2. Enter Button (Bottom Center) */}
+            <div className={`
+                absolute bottom-10 left-1/2 -translate-x-1/2 z-[60] w-full max-w-md px-6
+                transform transition-all duration-700 delay-300
+                ${stage >= 2 ? 'translate-y-0 opacity-100' : 'translate-y-20 opacity-0'}
+            `}>
+                <Button 
+                    onClick={handleNext} 
+                    className="w-full py-6 text-xl font-black tracking-[0.3em] border-2 border-[#dcb06b] text-[#dcb06b] bg-[#0a1a2f]/90 hover:bg-[#dcb06b] hover:text-black shadow-[0_0_30px_rgba(220,176,107,0.2)] hover:shadow-[0_0_50px_rgba(220,176,107,0.6)] transition-all duration-300 clip-corner-md"
+                >
                     ENTER BATTLEFIELD
                 </Button>
             </div>
 
         </div>
 
-        {/* Particles / Debris (Simple CSS) */}
-        {stage >= 2 && (
-            <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                <div className="absolute top-1/2 left-1/2 w-1 h-20 bg-[#dcb06b] rotate-45 animate-[fly-out_0.5s_ease-out_forwards]"></div>
-            </div>
-        )}
+        {/* Global Keyframes for this component */}
+        <style>{`
+            @keyframes impact-flash { 0% { opacity: 0; } 50% { opacity: 0.8; } 100% { opacity: 0; } }
+            @keyframes clash-shake {
+                0%, 100% { transform: translate(0, 0); }
+                10%, 30%, 50%, 70%, 90% { transform: translate(-4px, -4px); }
+                20%, 40%, 60%, 80% { transform: translate(4px, 4px); }
+            }
+        `}</style>
     </div>
   );
 };

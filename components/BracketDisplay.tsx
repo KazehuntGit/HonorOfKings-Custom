@@ -181,6 +181,48 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
 
   // --- START MATCH FLOW ---
 
+  const handleSkipAll = (forceMatchIdx = currentMatchIdx, background = false) => {
+    const matchData = allMatches.find(m => m.id === forceMatchIdx);
+    if (!matchData) return;
+    
+    const newAssignments: Record<string, string> = {};
+    const usedIds = new Set(Object.values(globalAssignments));
+    
+    const fillTeam = (teamName: string) => {
+        const teamIdx = match.teams.findIndex(t => t.name === teamName);
+        if (teamIdx === -1) return;
+        
+        ROLES_ORDER.forEach(role => {
+            const key = `${teamIdx}-${role}`;
+            if (globalAssignments[key]) return; 
+            
+            const available = activePlayers.filter(p => !usedIds.has(p.id));
+            const picked = getFlexibleCandidate(available, role);
+            
+            if (picked) {
+                newAssignments[key] = picked.id;
+                usedIds.add(picked.id);
+            }
+        });
+    };
+
+    if (matchData.teamA) fillTeam(matchData.teamA.name);
+    if (matchData.teamB) fillTeam(matchData.teamB.name);
+    
+    setGlobalAssignments(prev => ({ ...prev, ...newAssignments }));
+
+    if (!background) {
+        const allCards = new Set<string>();
+        ROLES_ORDER.forEach(r => { 
+            allCards.add(`m${forceMatchIdx}-A-${r}`); 
+            if (matchData.teamB) allCards.add(`m${forceMatchIdx}-B-${r}`); 
+        });
+        setRevealedSlots(allCards);
+        setCurrentRoleIdx(ROLES_ORDER.length - 1);
+        setCompletedReveals(prev => new Set(prev).add(forceMatchIdx));
+    }
+  };
+
   const startMatchFlow = (idx: number) => {
     setCurrentMatchIdx(idx);
 
@@ -202,7 +244,8 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
     // Determine target phase
     if (!shouldEnableRolling || completedReveals.has(idx)) {
          // Immediate "Skip" logic simulation - Fast Forward
-         handleSkipAll(idx, true); 
+         // Pass false for background to ensure cards are revealed visually
+         handleSkipAll(idx, false);
          setPhase('REVEAL');
     } else {
         // First time Reveal
@@ -331,8 +374,7 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
         </div>
       );
   };
-  
-// ... rest of the file ...
+
   const activeMatchData = useMemo(() => {
     const data = allMatches.find(m => m.id === currentMatchIdx);
     if (!data) return undefined;
@@ -410,14 +452,65 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
         }
     }
 
+    // --- CANDIDATE GENERATION LOGIC UPDATE ---
+    
+    // Calculate known taken players to exclude from spin wheel candidates
+    const knownTakenIds = new Set<string>();
+    
+    // 1. From completed matches (already revealed and finalized)
+    completedReveals.forEach(mIdx => {
+        const mData = allMatches.find(m => m.id === mIdx);
+        if(mData) {
+            [mData.teamA, mData.teamB].forEach(team => {
+                if(team) {
+                    const tIdx = match.teams.findIndex(t => t.name === team.name);
+                    if(tIdx !== -1) {
+                        ROLES_ORDER.forEach(r => {
+                            const pid = globalAssignments[`${tIdx}-${r}`];
+                            if(pid) knownTakenIds.add(pid);
+                        });
+                    }
+                }
+            });
+        }
+    });
+
+    // 2. From current session revealed slots
+    revealedSlots.forEach(slotKey => {
+         // slotKey format: m{matchIdx}-{Side}-{role}
+         // We can extract team and role to find player ID
+         const parts = slotKey.match(/^m(\d+)-([AB])-(.+)$/);
+         if (parts) {
+             const mIdx = parseInt(parts[1]);
+             // Since revealedSlots are reset per match, this typically only contains current match data
+             if (mIdx === currentMatchIdx) {
+                 const sideCode = parts[2];
+                 const r = parts[3]; // Role string (should match enum since we construct it)
+                 const mData = activeMatchData; 
+                 if (mData) {
+                     const team = sideCode === 'A' ? mData.teamA : mData.teamB;
+                     if(team) {
+                         const tIdx = match.teams.findIndex(t => t.name === team.name);
+                         if(tIdx !== -1) {
+                             const pid = globalAssignments[`${tIdx}-${r}`];
+                             if(pid) knownTakenIds.add(pid);
+                         }
+                     }
+                 }
+             }
+         }
+    });
+
+    // Filter candidates: Active players who are NOT known to be taken (and can play role)
     const candidates = activePlayers.filter(p => {
-        const assignedToOtherSlot = Object.entries(globalAssignments).some(([k, pid]) => k !== `${originalTeamIndex}-${role}` && pid === p.id);
-        if (assignedToOtherSlot) return false;
+        if (knownTakenIds.has(p.id)) return false;
         return canPlay(p, role);
     });
 
     const candidateNames = candidates.map(p => p.name);
+    // Ensure winner is always in the pool (they aren't in knownTakenIds yet because we haven't revealed this slot)
     if (!candidateNames.includes(winner.name)) candidateNames.push(winner.name);
+    
     const randomDuration = Math.floor(Math.random() * (9000 - 4500 + 1)) + 4500;
     
     setWheelState({ 
@@ -430,48 +523,6 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
         candidates: candidateNames, 
         duration: randomDuration 
     });
-  };
-
-  const handleSkipAll = (forceMatchIdx = currentMatchIdx, background = false) => {
-    const matchData = allMatches.find(m => m.id === forceMatchIdx);
-    if (!matchData) return;
-    
-    const newAssignments: Record<string, string> = {};
-    const usedIds = new Set(Object.values(globalAssignments));
-    
-    const fillTeam = (teamName: string) => {
-        const teamIdx = match.teams.findIndex(t => t.name === teamName);
-        if (teamIdx === -1) return;
-        
-        ROLES_ORDER.forEach(role => {
-            const key = `${teamIdx}-${role}`;
-            if (globalAssignments[key]) return; 
-            
-            const available = activePlayers.filter(p => !usedIds.has(p.id));
-            const picked = getFlexibleCandidate(available, role);
-            
-            if (picked) {
-                newAssignments[key] = picked.id;
-                usedIds.add(picked.id);
-            }
-        });
-    };
-
-    if (matchData.teamA) fillTeam(matchData.teamA.name);
-    if (matchData.teamB) fillTeam(matchData.teamB.name);
-    
-    setGlobalAssignments(prev => ({ ...prev, ...newAssignments }));
-
-    if (!background) {
-        const allCards = new Set<string>();
-        ROLES_ORDER.forEach(r => { 
-            allCards.add(`m${forceMatchIdx}-A-${r}`); 
-            if (matchData.teamB) allCards.add(`m${forceMatchIdx}-B-${r}`); 
-        });
-        setRevealedSlots(allCards);
-        setCurrentRoleIdx(ROLES_ORDER.length - 1);
-        setCompletedReveals(prev => new Set(prev).add(forceMatchIdx));
-    }
   };
 
   const handleRerollClick = (side: 'azure' | 'crimson', role: Role) => {
