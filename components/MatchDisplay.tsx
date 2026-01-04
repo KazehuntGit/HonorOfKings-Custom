@@ -15,6 +15,7 @@ interface MatchDisplayProps {
   activePlayers: Player[]; 
   initialMode: 'draft' | 'battle';
   onReset: () => void; 
+  onMinimize: () => void; // New Prop
   onCompleteMatch: (winner: 'azure' | 'crimson' | null, mvpId?: string, ratings?: Record<string, number>) => void; 
   onReroll: (team: 'azure' | 'crimson', role: Role, newPlayer: Player) => void;
   onStartBattle: () => void;
@@ -25,20 +26,18 @@ type ViewState = 'drafting' | 'transition' | 'final' | 'celebration' | 'evaluati
 
 export const MatchDisplay: React.FC<MatchDisplayProps> = ({ 
   match, activePlayers, initialMode, 
-  onReset, onCompleteMatch, onReroll, onStartBattle, onUpdatePlayer
+  onReset, onMinimize, onCompleteMatch, onReroll, onStartBattle, onUpdatePlayer
 }) => {
   const [viewState, setViewState] = useState<ViewState>('drafting');
   const [winningTeam, setWinningTeam] = useState<'azure' | 'crimson' | null>(null);
   const [autoFillFlash, setAutoFillFlash] = useState<string | null>(null);
 
-  // Rename State
   const [renameState, setRenameState] = useState<{ isOpen: boolean; player: Player | null; newName: string }>({
     isOpen: false,
     player: null,
     newName: ''
   });
 
-  // Confirmation Modal State
   const [confirmState, setConfirmState] = useState<{
     isOpen: boolean;
     title: string;
@@ -198,7 +197,6 @@ export const MatchDisplay: React.FC<MatchDisplayProps> = ({
   const handleCelebrationDismiss = () => setViewState('evaluation');
   const handleEvaluationComplete = (mvpId?: string, ratings?: Record<string, number>) => { onCompleteMatch(winningTeam, mvpId, ratings); }
 
-  // Rename Logic
   const openRenameModal = (player: Player) => {
     setRenameState({ isOpen: true, player, newName: player.name });
   };
@@ -210,10 +208,46 @@ export const MatchDisplay: React.FC<MatchDisplayProps> = ({
     }
   };
 
-  if (viewState === 'evaluation' && winningTeam) return <EvaluationScreen match={match} winner={winningTeam} onComplete={handleEvaluationComplete} />;
-  if (viewState === 'celebration' && winningTeam) return <VictoryCelebration winner={winningTeam} teamSlots={winningTeam === 'azure' ? match.azureTeam : match.crimsonTeam} onDismiss={handleCelebrationDismiss} />;
-  if (viewState === 'transition') return <PortalTransition azureTeam={match.azureTeam} crimsonTeam={match.crimsonTeam} onComplete={handleTransitionComplete} />;
-  if (viewState === 'final') return <MatchSummary match={match} onReset={handleMatchDecided} />;
+  // Pass minimize to sub-components where needed or render generic back button overlay
+  if (viewState === 'evaluation' && winningTeam) return (
+     <>
+        <div className="fixed top-6 left-6 z-[300]">
+            <Button variant="outline" size="sm" onClick={onMinimize} className="bg-black/80 border-[#dcb06b] text-[#dcb06b] hover:bg-[#dcb06b] hover:text-black">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+                LOBBY
+            </Button>
+        </div>
+        <EvaluationScreen match={match} winner={winningTeam} onComplete={handleEvaluationComplete} />
+     </>
+  );
+
+  if (viewState === 'celebration' && winningTeam) return (
+      <VictoryCelebration winner={winningTeam} teamSlots={winningTeam === 'azure' ? match.azureTeam : match.crimsonTeam} onDismiss={handleCelebrationDismiss} />
+  );
+
+  if (viewState === 'transition') return (
+    <>
+       <div className="fixed top-6 left-6 z-[300]">
+            <Button variant="outline" size="sm" onClick={onMinimize} className="bg-black/80 border-[#dcb06b] text-[#dcb06b] hover:bg-[#dcb06b] hover:text-black">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+                LOBBY
+            </Button>
+       </div>
+       <PortalTransition azureTeam={match.azureTeam} crimsonTeam={match.crimsonTeam} onComplete={handleTransitionComplete} />
+    </>
+  );
+
+  if (viewState === 'final') return (
+     <>
+        <div className="fixed top-6 left-6 z-[300]">
+            <Button variant="outline" size="sm" onClick={onMinimize} className="bg-black/80 border-[#dcb06b] text-[#dcb06b] hover:bg-[#dcb06b] hover:text-black">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+                LOBBY
+            </Button>
+        </div>
+        <MatchSummary match={match} onReset={handleMatchDecided} />
+     </>
+  );
 
   const renderPlayerCard = (role: Role, team: 'azure' | 'crimson') => {
     const teamSlots = team === 'azure' ? match.azureTeam : match.crimsonTeam;
@@ -251,27 +285,8 @@ export const MatchDisplay: React.FC<MatchDisplayProps> = ({
            </div>
            
            <div className={`absolute top-2 z-50 flex gap-2 transition-all opacity-0 group-hover:opacity-100 ${team === 'azure' ? 'right-4' : 'left-4'}`}>
-              {/* Reroll Button */}
-              <button 
-                  onClick={(e) => { e.stopPropagation(); handleRerollClick(team, role); }} 
-                  className="p-2.5 bg-black/60 hover:bg-[#dcb06b] rounded-full text-white hover:text-black transition-all"
-                  title="Reroll Player"
-              >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-              </button>
-
-              {/* Edit Name Button */}
-              <button 
-                  onClick={(e) => { e.stopPropagation(); if(player) openRenameModal(player); }} 
-                  className="p-2.5 bg-black/60 hover:bg-[#00d2ff] rounded-full text-white hover:text-black transition-all"
-                  title="Change Nickname"
-              >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                  </svg>
-              </button>
+              <button onClick={(e) => { e.stopPropagation(); handleRerollClick(team, role); }} className="p-2.5 bg-black/60 hover:bg-[#dcb06b] rounded-full text-white hover:text-black transition-all" title="Reroll Player"><svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg></button>
+              <button onClick={(e) => { e.stopPropagation(); if(player) openRenameModal(player); }} className="p-2.5 bg-black/60 hover:bg-[#00d2ff] rounded-full text-white hover:text-black transition-all" title="Change Nickname"><svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg></button>
            </div>
         </div>
       </div>
@@ -290,56 +305,31 @@ export const MatchDisplay: React.FC<MatchDisplayProps> = ({
 
   return (
     <>
-      <ConfirmModal 
-        isOpen={confirmState.isOpen}
-        title={confirmState.title}
-        message={confirmState.message}
-        onConfirm={confirmState.onConfirm}
-        onCancel={() => setConfirmState(prev => ({ ...prev, isOpen: false }))}
-        isDestructive={confirmState.isDestructive}
-      />
+      <ConfirmModal isOpen={confirmState.isOpen} title={confirmState.title} message={confirmState.message} onConfirm={confirmState.onConfirm} onCancel={() => setConfirmState(prev => ({ ...prev, isOpen: false }))} isDestructive={confirmState.isDestructive} />
+      {renameState.isOpen && (<div className="fixed inset-0 z-[1000] flex items-center justify-center p-4"><div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setRenameState({ isOpen: false, player: null, newName: '' })}></div><div className="relative w-full max-w-sm bg-[#0a1a2f] border border-[#dcb06b] clip-corner-md shadow-[0_0_30px_rgba(220,176,107,0.3)] animate-slide-in p-6"><h3 className="text-[#dcb06b] font-cinzel font-bold text-lg mb-4 text-center tracking-widest">CHANGE NICKNAME</h3><input type="text" value={renameState.newName} onChange={e => setRenameState({ ...renameState, newName: e.target.value })} className="w-full bg-black/50 border border-[#1e3a5f] p-3 text-white font-orbitron focus:border-[#dcb06b] outline-none mb-6 text-center" autoFocus /><div className="flex gap-3"><Button variant="secondary" onClick={() => setRenameState({ isOpen: false, player: null, newName: '' })} className="flex-1">CANCEL</Button><Button onClick={submitRename} className="flex-1">CONFIRM</Button></div></div></div>)}
 
-      {/* RENAME MODAL */}
-      {renameState.isOpen && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setRenameState({ isOpen: false, player: null, newName: '' })}></div>
-            <div className="relative w-full max-w-sm bg-[#0a1a2f] border border-[#dcb06b] clip-corner-md shadow-[0_0_30px_rgba(220,176,107,0.3)] animate-slide-in p-6">
-                <h3 className="text-[#dcb06b] font-cinzel font-bold text-lg mb-4 text-center tracking-widest">CHANGE NICKNAME</h3>
-                <input 
-                    type="text" 
-                    value={renameState.newName} 
-                    onChange={e => setRenameState({ ...renameState, newName: e.target.value })} 
-                    className="w-full bg-black/50 border border-[#1e3a5f] p-3 text-white font-orbitron focus:border-[#dcb06b] outline-none mb-6 text-center"
-                    autoFocus
-                />
-                <div className="flex gap-3">
-                    <Button variant="secondary" onClick={() => setRenameState({ isOpen: false, player: null, newName: '' })} className="flex-1">CANCEL</Button>
-                    <Button onClick={submitRename} className="flex-1">CONFIRM</Button>
-                </div>
-            </div>
-        </div>
-      )}
-
-      {wheelState && wheelState.isOpen && (
-        <SpinWheel candidates={wheelState.candidates} winnerName={wheelState.winnerName} team={wheelState.team} roleName={wheelState.role} roomId={match.roomId} duration={wheelState.duration} onComplete={handleWheelComplete} onCancel={handleWheelCancel} />
-      )}
+      {wheelState && wheelState.isOpen && <SpinWheel candidates={wheelState.candidates} winnerName={wheelState.winnerName} team={wheelState.team} roleName={wheelState.role} roomId={match.roomId} duration={wheelState.duration} onComplete={handleWheelComplete} onCancel={handleWheelCancel} />}
       <div className="w-full max-w-7xl mx-auto px-6 py-6 pb-28 relative h-screen flex flex-col justify-center overflow-hidden">
         
         {/* TOP CONTROLS */}
         <div className="absolute top-8 left-8 right-8 z-50 flex justify-between items-center">
-           <Button variant="outline" size="sm" onClick={handleAbort} className="border-red-900/60 text-red-500 hover:bg-red-900/20 text-xs px-6 shadow-[0_0_15px_rgba(239,68,68,0.2)]">
-              ABORT DRAFT
-           </Button>
+           <div className="flex gap-3">
+               <Button variant="outline" size="sm" onClick={onMinimize} className="bg-black/80 border-[#dcb06b] text-[#dcb06b] hover:bg-[#dcb06b] hover:text-black">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+                  LOBBY
+               </Button>
+               <Button variant="outline" size="sm" onClick={handleAbort} className="border-red-900/60 text-red-500 hover:bg-red-900/20 text-xs px-6 shadow-[0_0_15px_rgba(239,68,68,0.2)]">
+                  END SESSION
+               </Button>
+           </div>
 
-           {/* ROOM ID CENTERED IN TOP BAR */}
+           {/* ROOM ID CENTERED */}
            <div className="flex flex-col items-center gap-0 scale-[0.85] origin-top">
               <span className="text-[#dcb06b] font-orbitron text-[10px] tracking-[0.5em] font-black uppercase mb-1 opacity-70">ROOM ID</span>
               <div className="relative">
                  <div className="absolute -inset-2 bg-[#dcb06b] blur-[15px] opacity-20 pointer-events-none"></div>
                  <div className="relative bg-black/90 border border-[#dcb06b]/50 px-8 py-2 clip-corner-sm flex flex-col items-center shadow-[0_0_20px_rgba(220,176,107,0.3)]">
-                    <span className="text-2xl font-orbitron font-black text-white tracking-[0.4em] drop-shadow-[0_0_10px_#dcb06b]">
-                      {match.roomId}
-                    </span>
+                    <span className="text-2xl font-orbitron font-black text-white tracking-[0.4em] drop-shadow-[0_0_10px_#dcb06b]">{match.roomId}</span>
                  </div>
               </div>
            </div>
@@ -347,48 +337,19 @@ export const MatchDisplay: React.FC<MatchDisplayProps> = ({
            {!isFinished && <Button variant="outline" size="sm" onClick={handleSkipAll} className="border-[#dcb06b]/60 text-[#dcb06b] hover:bg-[#dcb06b]/10 text-xs px-6">SKIP ALL</Button>}
         </div>
         
-        {/* PLAYER GRID AREA */}
         <div className="relative max-w-7xl mx-auto w-full flex-1 flex flex-col justify-center px-10">
-          
-          {/* TEAM TITLES POSITIONED ABOVE GRID COLUMNS (MIRRORING) */}
           <div className="grid grid-cols-2 gap-12 md:gap-32 items-end mb-6">
-              <div className="text-left">
-                  <h2 className="text-2xl md:text-5xl font-cinzel font-black text-transparent bg-clip-text bg-gradient-to-b from-cyan-100 to-cyan-600 tracking-widest drop-shadow-[0_0_15px_rgba(6,182,212,0.4)]">
-                    AZURE <span className="hidden md:inline">GOLEM</span>
-                  </h2>
-                  <div className="mt-2 h-1 w-full bg-gradient-to-r from-cyan-500 to-transparent shadow-[0_0_10px_#00d2ff]"></div>
-              </div>
-              <div className="text-right">
-                  <h2 className="text-2xl md:text-5xl font-cinzel font-black text-transparent bg-clip-text bg-gradient-to-b from-red-100 to-red-600 tracking-widest drop-shadow-[0_0_15px_rgba(239,68,68,0.4)]">
-                    <span className="hidden md:inline">CRIMSON</span> GOLEM
-                  </h2>
-                  <div className="mt-2 h-1 w-full bg-gradient-to-l from-red-500 to-transparent shadow-[0_0_10px_#ef4444]"></div>
-              </div>
+              <div className="text-left"><h2 className="text-2xl md:text-5xl font-cinzel font-black text-transparent bg-clip-text bg-gradient-to-b from-cyan-100 to-cyan-600 tracking-widest drop-shadow-[0_0_15px_rgba(6,182,212,0.4)]">AZURE <span className="hidden md:inline">GOLEM</span></h2><div className="mt-2 h-1 w-full bg-gradient-to-r from-cyan-500 to-transparent shadow-[0_0_10px_#00d2ff]"></div></div>
+              <div className="text-right"><h2 className="text-2xl md:text-5xl font-cinzel font-black text-transparent bg-clip-text bg-gradient-to-b from-red-100 to-red-600 tracking-widest drop-shadow-[0_0_15px_rgba(239,68,68,0.4)]"><span className="hidden md:inline">CRIMSON</span> GOLEM</h2><div className="mt-2 h-1 w-full bg-gradient-to-l from-red-500 to-transparent shadow-[0_0_10px_#ef4444]"></div></div>
           </div>
-
-          {/* VS INDICATOR FLOATING BEHIND GRID */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-20">
-              <span className="text-[12rem] font-black italic text-[#dcb06b] font-orbitron select-none">VS</span>
-          </div>
-
-          {/* PLAYER CARDS */}
-          <div className="space-y-4 relative z-10">
-            {displayRoles.map((role) => (
-              <div key={role} className="grid grid-cols-2 gap-12 md:gap-32 items-center">
-                <div>{renderPlayerCard(role, 'azure')}</div>
-                <div>{renderPlayerCard(role, 'crimson')}</div>
-              </div>
-            ))}
-          </div>
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-20"><span className="text-[12rem] font-black italic text-[#dcb06b] font-orbitron select-none">VS</span></div>
+          <div className="space-y-4 relative z-10">{displayRoles.map((role) => (<div key={role} className="grid grid-cols-2 gap-12 md:gap-32 items-center"><div>{renderPlayerCard(role, 'azure')}</div><div>{renderPlayerCard(role, 'crimson')}</div></div>))}</div>
         </div>
 
-        {/* BOTTOM ACTION AREA */}
         <div className="fixed bottom-0 left-0 right-0 p-8 z-50 flex justify-center items-end h-28 pointer-events-none">
            <div className="pointer-events-auto">
               {!isFinished ? (
-                 <button onClick={handleNext} className="group relative px-16 h-16 bg-[#0a1a2f] border-2 border-[#dcb06b] clip-corner-md flex items-center justify-center text-[#dcb06b] font-cinzel font-bold text-base hover:bg-[#dcb06b] hover:text-[#05090f] transition-all duration-300 shadow-[0_0_30px_rgba(220,176,107,0.4)]">
-                   {buttonText}
-                 </button>
+                 <button onClick={handleNext} className="group relative px-16 h-16 bg-[#0a1a2f] border-2 border-[#dcb06b] clip-corner-md flex items-center justify-center text-[#dcb06b] font-cinzel font-bold text-base hover:bg-[#dcb06b] hover:text-[#05090f] transition-all duration-300 shadow-[0_0_30px_rgba(220,176,107,0.4)]">{buttonText}</button>
               ) : (
                  <Button onClick={handleInitializeBattle} size="lg" className="px-24 h-16 text-lg animate-pulse shadow-[0_0_40px_rgba(220,176,107,0.5)]">INITIALIZE BATTLE</Button>
               )}

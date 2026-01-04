@@ -14,6 +14,7 @@ import { getFlexibleCandidate, canPlay, TBD_PLAYER } from '../utils/matchmaker';
 interface BracketDisplayProps {
   match: BracketMatchResult;
   onReset: () => void;
+  onMinimize: () => void; // New Prop
   activePlayers: Player[];
   onReroll: (teamIndex: number, role: Role, newPlayer: Player) => void;
   onUpdatePlayer: (updatedPlayer: Player) => void;
@@ -29,7 +30,7 @@ interface InternalMatch {
 
 type BracketPhase = 'OVERVIEW' | 'REVEAL' | 'TRANSITION' | 'DECLARE_WIN' | 'CELEBRATION' | 'EVALUATION' | 'TOURNAMENT_END';
 
-export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, activePlayers, onReroll, onUpdatePlayer }) => {
+export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, onMinimize, activePlayers, onReroll, onUpdatePlayer }) => {
   const [phase, setPhase] = useState<BracketPhase>('OVERVIEW');
   const [currentMatchIdx, setCurrentMatchIdx] = useState(0);
   const [matchRoomIds, setMatchRoomIds] = useState<Record<number, string>>({});
@@ -38,7 +39,6 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
   const [currentRoundWinner, setCurrentRoundWinner] = useState<'azure' | 'crimson' | null>(null);
   const [tournamentChampion, setTournamentChampion] = useState<any | null>(null);
 
-  // GLOBAL ASSIGNMENT TRACKING - Initialize from pre-assigned match if available
   const [globalAssignments, setGlobalAssignments] = useState<Record<string, string>>(() => {
       const initial: Record<string, string> = {};
       match.teams.forEach((team, tIdx) => {
@@ -51,7 +51,6 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
       return initial;
   });
 
-  // Update assignments if match prop changes (e.g. from reroll in parent)
   useEffect(() => {
       setGlobalAssignments(prev => {
           const next = { ...prev };
@@ -66,10 +65,8 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
       });
   }, [match]);
 
-  // UI States
   const [showAbortConfirm, setShowAbortConfirm] = useState(false);
 
-  // Rename State
   const [renameState, setRenameState] = useState<{ isOpen: boolean; player: Player | null; newName: string }>({
     isOpen: false,
     player: null,
@@ -90,7 +87,6 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
     duration: number;
   } | null>(null);
 
-  // Helper to get the actual assigned player or TBD
   const getAssignedPlayer = useCallback((teamIdx: number, role: Role): Player => {
       const key = `${teamIdx}-${role}`;
       const pid = globalAssignments[key];
@@ -100,7 +96,6 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
       return TBD_PLAYER;
   }, [globalAssignments, activePlayers]);
 
-  // --- MEMOIZED BRACKET GENERATION ---
   const { quarterMatches, semiMatches, grandFinalMatch, allMatches, hasQuarterFinals } = useMemo(() => {
       const getTeamObj = (teamIndex: number) => {
           if (teamIndex < 0 || teamIndex >= match.teams.length) return null;
@@ -135,7 +130,6 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
 
       const numTeams = match.teams.length;
 
-      // Case 1: 3 teams (Stepladder)
       if (numTeams === 3) {
         const m0: InternalMatch = { id: 0, label: 'ELIMINATION', mode: 'BO1', teamA: getTeamObj(0), teamB: getTeamObj(1) };
         const m1: InternalMatch = { id: 1, label: 'CHALLENGER', mode: 'BO1', teamA: getLoserTeam(0, m0.teamA, m0.teamB), teamB: getTeamObj(2) };
@@ -144,7 +138,6 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
         return { quarterMatches: [], semiMatches: [m0, m1], grandFinalMatch: m2, allMatches: matches, hasQuarterFinals: false };
       }
 
-      // Case 2: 5 or 6 teams
       if (numTeams === 5 || numTeams === 6) {
         const q0: InternalMatch = { id: 0, label: 'QUARTER 1', mode: 'BO1', teamA: getTeamObj(0), teamB: getTeamObj(1) };
         const q1: InternalMatch = { id: 1, label: 'QUARTER 2', mode: 'BO1', teamA: getTeamObj(2), teamB: getTeamObj(3) };
@@ -156,7 +149,6 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
         return { quarterMatches: [q0, q1, q2], semiMatches: [s1, s2], grandFinalMatch: gf, allMatches: matches, hasQuarterFinals: true };
       }
 
-      // Case 3: 4, 8 teams
       const hasQuarterFinals = numTeams === 8;
       const qMatches: InternalMatch[] = [];
       if (numTeams === 8) {
@@ -179,8 +171,6 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
       return { quarterMatches: qMatches, semiMatches: sMatches, grandFinalMatch: gf, allMatches: all, hasQuarterFinals };
   }, [match, scores, globalAssignments, getAssignedPlayer]); 
 
-  // --- START MATCH FLOW ---
-
   const handleSkipAll = (forceMatchIdx = currentMatchIdx, background = false) => {
     const matchData = allMatches.find(m => m.id === forceMatchIdx);
     if (!matchData) return;
@@ -191,14 +181,11 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
     const fillTeam = (teamName: string) => {
         const teamIdx = match.teams.findIndex(t => t.name === teamName);
         if (teamIdx === -1) return;
-        
         ROLES_ORDER.forEach(role => {
             const key = `${teamIdx}-${role}`;
             if (globalAssignments[key]) return; 
-            
             const available = activePlayers.filter(p => !usedIds.has(p.id));
             const picked = getFlexibleCandidate(available, role);
-            
             if (picked) {
                 newAssignments[key] = picked.id;
                 usedIds.add(picked.id);
@@ -225,7 +212,6 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
 
   const startMatchFlow = (idx: number) => {
     setCurrentMatchIdx(idx);
-
     const m = allMatches.find(m => m.id === idx);
     const numTeams = match.teams.length;
     let shouldEnableRolling = false;
@@ -241,24 +227,14 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
         return;
     }
 
-    // Determine target phase
     if (!shouldEnableRolling || completedReveals.has(idx)) {
-         // Immediate "Skip" logic simulation - Fast Forward
-         // Pass false for background to ensure cards are revealed visually
          handleSkipAll(idx, false);
          setPhase('REVEAL');
     } else {
-        // First time Reveal
         setRevealedSlots(new Set());
         setCurrentRoleIdx(-1);
         setPhase('REVEAL');
     }
-  };
-
-  const handleByeCompletion = () => {
-     // Auto-win for Bye rounds after reveal
-     setScores(prev => ({ ...prev, [`${currentMatchIdx}-A`]: 1, [`${currentMatchIdx}-B`]: 0 }));
-     setPhase('OVERVIEW');
   };
 
   const handleEvaluationComplete = (mvpId?: string, ratings?: Record<string, number>) => {
@@ -327,7 +303,6 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
       const isDone = sA > 0 || sB > 0;
       const isBye = !m.teamB;
       const isGrandFinal = m.label === 'GRAND FINAL';
-      const numTeams = match.teams.length;
       
       return (
         <div className={`w-80 bg-[#0a1a2f]/95 ${isGrandFinal ? 'border-2 border-[#dcb06b] shadow-[0_0_40px_rgba(220,176,107,0.4)]' : 'border border-[#1e3a5f]'} clip-corner-md p-0 relative transition-all duration-300 group hover:bg-[#0f223d] hover:border-[#dcb06b]/50 z-10`}>
@@ -383,11 +358,7 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
         const sB = scores[`${currentMatchIdx}-B`] || 0;
         const gamesPlayed = sA + sB;
         if (gamesPlayed % 2 !== 0) {
-            return {
-                ...data,
-                teamA: data.teamB, 
-                teamB: data.teamA
-            };
+            return { ...data, teamA: data.teamB, teamB: data.teamA };
         }
     }
     return data;
@@ -397,21 +368,13 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
 
   const handleNextReveal = () => {
     if (!activeMatchData) return;
-    
-    // FIX: Deterministic next slot logic based on currentRoleIdx
-    // currentRoleIdx tracks the last FULLY COMPLETED role row (both Azure & Crimson revealed)
-    // So we always look at currentRoleIdx + 1 to find the current active row.
     const targetRoleIdx = currentRoleIdx + 1;
-
-    if (targetRoleIdx >= ROLES_ORDER.length) return; // All roles done
+    if (targetRoleIdx >= ROLES_ORDER.length) return; 
 
     const role = ROLES_ORDER[targetRoleIdx];
     const azureId = `m${currentMatchIdx}-A-${role}`;
-    
-    // If Azure is not revealed, it's Azure's turn. Otherwise Crimson's.
     const side: 'azure' | 'crimson' = !revealedSlots.has(azureId) ? 'azure' : 'crimson';
 
-    // --- Proceed to reveal this slot ---
     const teamData = side === 'azure' ? activeMatchData.teamA : activeMatchData.teamB;
     const originalTeamIndex = match.teams.findIndex(t => t.name === teamData?.name);
     
@@ -419,25 +382,18 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
 
     let winner = getAssignedPlayer(originalTeamIndex, role);
     
-    // JUST IN TIME ASSIGNMENT
     if (winner.id === 'tbd') {
         const currentlyAssignedIds = new Set(Object.values(globalAssignments));
         const availablePlayers = activePlayers.filter(p => !currentlyAssignedIds.has(p.id));
         const pickedPlayer = getFlexibleCandidate(availablePlayers, role);
-        
         if (pickedPlayer) {
             winner = pickedPlayer;
             const key = `${originalTeamIndex}-${role}`;
             setGlobalAssignments(prev => ({ ...prev, [key]: pickedPlayer.id }));
         }
     }
-
-    // --- CANDIDATE GENERATION LOGIC ---
     
-    // Calculate known taken players to exclude from spin wheel candidates
     const knownTakenIds = new Set<string>();
-    
-    // 1. From completed matches (already revealed and finalized)
     completedReveals.forEach(mIdx => {
         const mData = allMatches.find(m => m.id === mIdx);
         if(mData) {
@@ -455,7 +411,6 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
         }
     });
 
-    // 2. From current session revealed slots
     revealedSlots.forEach(slotKey => {
          const parts = slotKey.match(/^m(\d+)-([AB])-(.+)$/);
          if (parts) {
@@ -478,14 +433,12 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
          }
     });
 
-    // Filter candidates: Active players who are NOT known to be taken (and can play role)
     const candidates = activePlayers.filter(p => {
         if (knownTakenIds.has(p.id)) return false;
         return canPlay(p, role);
     });
 
     const candidateNames = candidates.map(p => p.name);
-    // Ensure winner is always in the pool
     if (!candidateNames.includes(winner.name)) candidateNames.push(winner.name);
     
     const randomDuration = Math.floor(Math.random() * (9000 - 4500 + 1)) + 4500;
@@ -546,7 +499,6 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
         const id = `m${currentMatchIdx}-${team === 'azure' ? 'A' : 'B'}-${role}`;
         setRevealedSlots(prev => new Set(prev).add(id));
         
-        // Standard Match Logic Only (Bye support removed from reveal)
         if (team === 'crimson') {
             const nextIdx = currentRoleIdx + 1;
             setCurrentRoleIdx(nextIdx);
@@ -629,22 +581,28 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
   };
 
   if (phase === 'TOURNAMENT_END') return renderTournamentEnd();
-  if (phase === 'TRANSITION' && activeMatchData) return <PortalTransition azureTeam={activeMatchData.teamA?.slots || []} crimsonTeam={activeMatchData.teamB?.slots || []} onComplete={() => setPhase('DECLARE_WIN')} />;
-  if (phase === 'DECLARE_WIN' && activeMatchData) return <MatchSummary match={{ roomId: activeRoomId, azureTeam: activeMatchData.teamA?.slots || [], crimsonTeam: activeMatchData.teamB?.slots || [], isCoachMode: false, timestamp: Date.now() }} onReset={(w) => { if(!w) setPhase('OVERVIEW'); else { setCurrentRoundWinner(w); setPhase('CELEBRATION'); } }} />;
-  if (phase === 'CELEBRATION' && currentRoundWinner && activeMatchData) return <VictoryCelebration winner={currentRoundWinner} teamSlots={(currentRoundWinner === 'azure' ? activeMatchData.teamA?.slots : activeMatchData.teamB?.slots) || []} onDismiss={() => setPhase('EVALUATION')} />;
-  if (phase === 'EVALUATION' && currentRoundWinner && activeMatchData) return <EvaluationScreen match={{ roomId: activeRoomId, azureTeam: activeMatchData.teamA?.slots || [], crimsonTeam: activeMatchData.teamB?.slots || [], isCoachMode: false, timestamp: Date.now() }} winner={currentRoundWinner} onComplete={handleEvaluationComplete} />;
 
-  // DETERMINE BUTTON TEXT FOR REVEAL PHASE
+  // Overlay Return Button for Full Screen Phases
+  const overlayBackButton = (
+      <div className="fixed top-6 left-6 z-[300]">
+            <Button variant="outline" size="sm" onClick={onMinimize} className="bg-black/80 border-[#dcb06b] text-[#dcb06b] hover:bg-[#dcb06b] hover:text-black">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+                LOBBY
+            </Button>
+      </div>
+  );
+
+  if (phase === 'TRANSITION' && activeMatchData) return <>{overlayBackButton}<PortalTransition azureTeam={activeMatchData.teamA?.slots || []} crimsonTeam={activeMatchData.teamB?.slots || []} onComplete={() => setPhase('DECLARE_WIN')} /></>;
+  if (phase === 'DECLARE_WIN' && activeMatchData) return <>{overlayBackButton}<MatchSummary match={{ roomId: activeRoomId, azureTeam: activeMatchData.teamA?.slots || [], crimsonTeam: activeMatchData.teamB?.slots || [], isCoachMode: false, timestamp: Date.now() }} onReset={(w) => { if(!w) setPhase('OVERVIEW'); else { setCurrentRoundWinner(w); setPhase('CELEBRATION'); } }} /></>;
+  if (phase === 'CELEBRATION' && currentRoundWinner && activeMatchData) return <VictoryCelebration winner={currentRoundWinner} teamSlots={(currentRoundWinner === 'azure' ? activeMatchData.teamA?.slots : activeMatchData.teamB?.slots) || []} onDismiss={() => setPhase('EVALUATION')} />;
+  if (phase === 'EVALUATION' && currentRoundWinner && activeMatchData) return <>{overlayBackButton}<EvaluationScreen match={{ roomId: activeRoomId, azureTeam: activeMatchData.teamA?.slots || [], crimsonTeam: activeMatchData.teamB?.slots || [], isCoachMode: false, timestamp: Date.now() }} winner={currentRoundWinner} onComplete={handleEvaluationComplete} /></>;
+
   const getRevealButtonText = () => {
      if (revealedSlots.size >= 10) return "INITIALIZE BATTLE";
-     
      const nextRoleIdx = currentRoleIdx + 1;
-     // If we are at the end, default to Start/Initialize
      if (nextRoleIdx >= ROLES_ORDER.length) return "INITIALIZE BATTLE";
-     
      const nextRole = ROLES_ORDER[nextRoleIdx];
      const azureRevealed = revealedSlots.has(`m${currentMatchIdx}-A-${nextRole}`);
-     
      return azureRevealed ? `SELECT CRIMSON ${nextRole.replace(' Lane', '').toUpperCase()}` : `SELECT AZURE ${nextRole.replace(' Lane', '').toUpperCase()}`;
   };
 
@@ -656,6 +614,14 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,#0a1a2f_0%,#05090f_60%)] pointer-events-none"></div>
       {phase === 'OVERVIEW' ? (
         <div className="relative z-10 w-full min-h-screen p-8 md:p-12 flex flex-col items-center min-w-max">
+            {/* Top Bar for Overview */}
+            <div className="absolute top-8 left-8">
+               <Button variant="outline" size="sm" onClick={onMinimize} className="bg-black/80 border-[#dcb06b] text-[#dcb06b] hover:bg-[#dcb06b] hover:text-black">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+                  LOBBY
+               </Button>
+            </div>
+
           <div className="text-center mb-16"><h1 className="text-4xl md:text-6xl font-cinzel font-black text-[#dcb06b] tracking-[0.3em] mb-4 uppercase">TOURNAMENT BRACKET</h1><p className="text-[10px] text-[#4a5f78] font-orbitron font-black tracking-[0.5em] uppercase border-y border-[#4a5f78]/30 py-2 inline-block">BATTLE FOR GLORY</p></div>
           <div className="flex gap-24 md:gap-40 items-center justify-center relative py-20">
             {hasQuarterFinals && (<div className="flex flex-col gap-16 relative">{quarterMatches.map((m, i) => (<div key={m.id} className="relative">{renderBracketMatchCard(m)}{match.teams.length === 5 || match.teams.length === 6 ? (i < 2 ? (i === 0 && <EnergyConnector type="fork" height={274} />) : <EnergyConnector type="straight" height={0} />) : (i % 2 === 0 && <EnergyConnector type="fork" height={322} />)}</div>))}</div>)}
@@ -667,7 +633,19 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
       ) : (
         <div className="w-full max-w-7xl mx-auto px-6 py-6 pb-28 relative h-screen flex flex-col justify-center overflow-hidden">
             {wheelState && wheelState.isOpen && <SpinWheel candidates={wheelState.candidates} winnerName={wheelState.winnerName} team={wheelState.team} roleName={wheelState.role} roomId={activeRoomId} duration={wheelState.duration} onComplete={handleWheelComplete} onCancel={() => setWheelState(null)} />}
-            <div className="absolute top-8 left-8 right-8 z-50 flex justify-between items-center"><Button variant="outline" size="sm" onClick={() => setPhase('OVERVIEW')} className="border-[#dcb06b]/60 text-[#dcb06b] hover:bg-[#dcb06b]/10 text-xs px-6">BACK TO BRACKET</Button><div className="flex flex-col items-center gap-0 scale-[0.85] origin-top"><span className="text-[#dcb06b] font-orbitron text-[10px] tracking-[0.4em] font-black uppercase mb-1 opacity-70">ROOM ID</span><div className="relative"><div className="absolute -inset-2 bg-[#dcb06b] blur-[15px] opacity-20 pointer-events-none"></div><div className="relative bg-black/90 border border-[#dcb06b]/50 px-8 py-2 clip-corner-sm flex flex-col items-center shadow-[0_0_20px_rgba(220,176,107,0.3)]"><span className="text-2xl font-orbitron font-black text-white tracking-[0.4em] drop-shadow-[0_0_10px_#dcb06b]">{activeRoomId}</span></div></div></div>{revealedSlots.size < 10 ? <Button variant="outline" size="sm" onClick={() => handleSkipAll(currentMatchIdx)} className="border-[#dcb06b]/60 text-[#dcb06b] hover:bg-[#dcb06b]/10 text-xs px-6">SKIP ALL</Button> : <div className="w-[120px]"></div>}</div>
+            
+            <div className="absolute top-8 left-8 right-8 z-50 flex justify-between items-center">
+                 <div className="flex gap-3">
+                   <Button variant="outline" size="sm" onClick={onMinimize} className="bg-black/80 border-[#dcb06b] text-[#dcb06b] hover:bg-[#dcb06b] hover:text-black">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+                      LOBBY
+                   </Button>
+                   <Button variant="outline" size="sm" onClick={() => setPhase('OVERVIEW')} className="border-[#dcb06b]/60 text-[#dcb06b] hover:bg-[#dcb06b]/10 text-xs px-6">
+                      BACK TO BRACKET
+                   </Button>
+                </div>
+                
+                <div className="flex flex-col items-center gap-0 scale-[0.85] origin-top"><span className="text-[#dcb06b] font-orbitron text-[10px] tracking-[0.4em] font-black uppercase mb-1 opacity-70">ROOM ID</span><div className="relative"><div className="absolute -inset-2 bg-[#dcb06b] blur-[15px] opacity-20 pointer-events-none"></div><div className="relative bg-black/90 border border-[#dcb06b]/50 px-8 py-2 clip-corner-sm flex flex-col items-center shadow-[0_0_20px_rgba(220,176,107,0.3)]"><span className="text-2xl font-orbitron font-black text-white tracking-[0.4em] drop-shadow-[0_0_10px_#dcb06b]">{activeRoomId}</span></div></div></div>{revealedSlots.size < 10 ? <Button variant="outline" size="sm" onClick={() => handleSkipAll(currentMatchIdx)} className="border-[#dcb06b]/60 text-[#dcb06b] hover:bg-[#dcb06b]/10 text-xs px-6">SKIP ALL</Button> : <div className="w-[120px]"></div>}</div>
             <div className="relative max-w-7xl mx-auto w-full flex-1 flex flex-col justify-center px-10">
                 <div className="grid grid-cols-2 gap-12 md:gap-32 items-end mb-6"><div className="text-left"><h2 className="text-2xl md:text-5xl font-cinzel font-black text-transparent bg-clip-text bg-gradient-to-b from-cyan-100 to-cyan-600 tracking-widest drop-shadow-[0_0_15px_rgba(6,182,212,0.4)]" style={{ color: activeMatchData?.teamA?.color }}>{activeMatchData?.teamA?.name.split(' ')[0]} <span className="hidden md:inline">{activeMatchData?.teamA?.name.split(' ')[1] || 'GOLEM'}</span></h2><div className="mt-2 h-1 w-full bg-gradient-to-r from-cyan-500 to-transparent shadow-[0_0_10px_#00d2ff]"></div></div><div className="text-right"><h2 className="text-2xl md:text-5xl font-cinzel font-black text-transparent bg-clip-text bg-gradient-to-b from-red-100 to-red-600 tracking-widest drop-shadow-[0_0_15px_rgba(239,68,68,0.4)]" style={{ color: activeMatchData?.teamB?.color }}><span className="hidden md:inline">{activeMatchData?.teamB?.name.split(' ')[0] || 'CRIMSON'}</span> {activeMatchData?.teamB?.name.split(' ')[1] || 'GOLEM'}</h2><div className="mt-2 h-1 w-full bg-gradient-to-l from-red-500 to-transparent shadow-[0_0_10px_#ef4444]"></div></div></div>
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-20"><span className="text-[12rem] font-black italic text-[#dcb06b] font-orbitron select-none">VS</span></div>

@@ -12,26 +12,21 @@ interface PortalTransitionProps {
 
 export const PortalTransition: React.FC<PortalTransitionProps> = ({ onComplete, azureTeam, crimsonTeam }) => {
   const [stage, setStage] = useState(0);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  
+  // Stream State
+  const [showConfig, setShowConfig] = useState(false);
+  const [showPlayer, setShowPlayer] = useState(false); // Controls the video popup
+  const [streamUrl, setStreamUrl] = useState('');
+  const [videoId, setVideoId] = useState<string | null>(null);
 
   useEffect(() => {
-    // Sequence:
-    // 0ms: Start (Empty)
-    // 100ms: Slide In (Stage 1) - Vertical Slide accelerating
-    // 800ms: Impact/Shake (Stage 2)
-    
+    // Animation sequence
     const t1 = setTimeout(() => setStage(1), 100);
     const t2 = setTimeout(() => setStage(2), 800);
-
-    // Timer Interval
-    const interval = setInterval(() => {
-       setElapsedSeconds(prev => prev + 1);
-    }, 1000);
 
     return () => {
         clearTimeout(t1);
         clearTimeout(t2);
-        clearInterval(interval);
     };
   }, []);
 
@@ -42,10 +37,23 @@ export const PortalTransition: React.FC<PortalTransitionProps> = ({ onComplete, 
     }, 500);
   };
 
-  const formatTime = (totalSeconds: number) => {
-    const mins = Math.floor(totalSeconds / 60);
-    const secs = totalSeconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  const extractVideoId = (url: string) => {
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+    const match = url.match(regExp);
+    return (match && match[2].length === 11) ? match[2] : null;
+  };
+
+  const handleStreamSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+      const id = extractVideoId(streamUrl);
+      if (id) {
+          setVideoId(id);
+          setShowConfig(false);
+          setShowPlayer(true); // Auto open player on success
+      } else {
+          if (!streamUrl.trim()) setVideoId(null);
+          setShowConfig(false);
+      }
   };
 
   const renderTeamGrid = (teamSlots: TeamSlot[], teamColor: 'cyan' | 'red') => {
@@ -56,7 +64,6 @@ export const PortalTransition: React.FC<PortalTransitionProps> = ({ onComplete, 
       });
 
       const isCyan = teamColor === 'cyan';
-      const accentColor = isCyan ? '#00d2ff' : '#ef4444';
       
       return (
         <div className="grid grid-cols-5 gap-3 md:gap-6 w-full max-w-6xl mx-auto px-6 relative z-10">
@@ -78,15 +85,9 @@ export const PortalTransition: React.FC<PortalTransitionProps> = ({ onComplete, 
                         `}
                         style={{ transitionDelay: `${900 + (idx * 50)}ms` }}
                     >
-                        {/* Inner Gradient Highlight */}
                         <div className={`absolute inset-0 bg-gradient-to-b ${isCyan ? 'from-[#00d2ff]/10' : 'from-[#ef4444]/10'} to-transparent opacity-50`}></div>
-
-                        {/* Top Decoration Bar */}
                         <div className={`w-full h-1 ${isCyan ? 'bg-[#00d2ff]' : 'bg-[#ef4444]'} opacity-70`}></div>
-
-                        {/* Content Container */}
                         <div className="flex-1 flex flex-col items-center justify-center p-2 w-full relative z-10">
-                            {/* Role Icon - Glowing */}
                             <div className={`
                                 mb-2 transform transition-transform duration-300 group-hover:scale-110 
                                 ${isCyan ? 'text-[#00d2ff] drop-shadow-[0_0_8px_rgba(0,210,255,0.6)]' : 'text-[#ef4444] drop-shadow-[0_0_8px_rgba(239,68,68,0.6)]'}
@@ -96,14 +97,10 @@ export const PortalTransition: React.FC<PortalTransitionProps> = ({ onComplete, 
                                    {RoleIcons[slot.role]}
                                 </div>
                             </div>
-
-                            {/* Tech Lines Decoration */}
                             <div className="w-full flex justify-between px-2 mb-2 opacity-30">
                                 <div className={`h-[1px] w-3 ${isCyan ? 'bg-cyan-400' : 'bg-red-500'}`}></div>
                                 <div className={`h-[1px] w-3 ${isCyan ? 'bg-cyan-400' : 'bg-red-500'}`}></div>
                             </div>
-
-                            {/* Player Name */}
                             <div className="w-full relative">
                                 <div className="absolute inset-0 bg-black/60 blur-sm"></div>
                                 <span className="relative z-10 block text-[9px] md:text-xs font-orbitron font-bold text-white truncate w-full text-center tracking-wider py-1">
@@ -111,11 +108,8 @@ export const PortalTransition: React.FC<PortalTransitionProps> = ({ onComplete, 
                                 </span>
                             </div>
                         </div>
-
-                        {/* Corner Accents */}
                         <div className={`absolute bottom-0 left-0 w-2 h-2 border-b border-l ${isCyan ? 'border-[#00d2ff]' : 'border-[#ef4444]'}`}></div>
                         <div className={`absolute bottom-0 right-0 w-2 h-2 border-b border-r ${isCyan ? 'border-[#00d2ff]' : 'border-[#ef4444]'}`}></div>
-                        
                         {isCoach && (
                             <div className="absolute top-2 right-2 text-[8px] font-black uppercase text-white bg-white/20 px-1 rounded">COACH</div>
                         )}
@@ -130,132 +124,127 @@ export const PortalTransition: React.FC<PortalTransitionProps> = ({ onComplete, 
     <div className="fixed inset-0 z-[100] bg-[#05090f] flex flex-col items-center justify-center overflow-hidden font-inter select-none">
         
         {/* --- GLOBAL BACKGROUND EFFECTS --- */}
-        {/* Cyber Grid */}
         <div className="absolute inset-0 opacity-20 pointer-events-none" 
-             style={{ backgroundImage: 'linear-gradient(#1e3a5f 1px, transparent 1px), linear-gradient(90deg, #1e3a5f 1px, transparent 1px)', backgroundSize: '40px 40px' }}>
+            style={{ backgroundImage: 'linear-gradient(#1e3a5f 1px, transparent 1px), linear-gradient(90deg, #1e3a5f 1px, transparent 1px)', backgroundSize: '40px 40px' }}>
         </div>
-        {/* Vignette */}
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,#000000_90%)] z-0"></div>
-        
-        {/* Impact Flash */}
-        <div className={`
-            absolute inset-0 bg-white pointer-events-none z-[60] mix-blend-overlay
-            ${stage === 2 ? 'animate-[impact-flash_0.3s_ease-out_forwards]' : 'opacity-0'}
-        `}></div>
-
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,#000000_90%)] z-0 pointer-events-none"></div>
+        <div className={`absolute inset-0 bg-white pointer-events-none z-[60] mix-blend-overlay ${stage === 2 ? 'animate-[impact-flash_0.3s_ease-out_forwards]' : 'opacity-0'}`}></div>
 
         {/* --- MAIN ANIMATION CONTAINER --- */}
         <div className={`
-            absolute inset-0 flex flex-col w-full h-full z-10
+            absolute inset-0 flex flex-col w-full h-full z-10 pointer-events-none
             ${stage === 2 ? 'animate-[clash-shake_0.4s_ease-in-out]' : ''}
             transition-opacity duration-700
             ${stage === 3 ? 'opacity-0 scale-105' : 'opacity-100 scale-100'}
         `}>
             
-            {/* --- TOP HALF (AZURE) --- */}
+            {/* TOP HALF (AZURE) */}
             <div className={`
                 absolute top-0 left-0 right-0 h-[50vh]
-                bg-gradient-to-b from-[#0a1a2f] via-[#0a1a2f]/95 to-[#00d2ff]/10
+                bg-gradient-to-b from-[#0a1a2f] via-[#0a1a2f]/80 to-[#00d2ff]/10
                 flex flex-col items-center justify-end
                 transform transition-all duration-500 cubic-bezier(0.22, 1, 0.36, 1)
                 ${stage >= 1 ? 'translate-y-0' : '-translate-y-full'}
                 z-10 pb-16
             `}>
-                {/* Team Label */}
                 <div className="absolute top-[15%] flex flex-col items-center">
-                    <h2 className="text-4xl md:text-6xl font-cinzel font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-[#00d2ff] tracking-[0.2em] drop-shadow-[0_0_20px_rgba(0,210,255,0.5)]">
-                        AZURE
-                    </h2>
+                    <h2 className="text-4xl md:text-6xl font-cinzel font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-[#00d2ff] tracking-[0.2em] drop-shadow-[0_0_20px_rgba(0,210,255,0.5)]">AZURE</h2>
                     <div className="text-[#00d2ff] text-xs font-orbitron tracking-[0.5em] opacity-70 mt-2">ALLIANCE</div>
                 </div>
-                
-                {/* Players */}
                 {renderTeamGrid(azureTeam, 'cyan')}
-                
-                {/* Border Glow Line */}
                 <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#00d2ff] shadow-[0_0_30px_#00d2ff] z-20"></div>
             </div>
 
-
-            {/* --- BOTTOM HALF (CRIMSON) --- */}
+            {/* BOTTOM HALF (CRIMSON) */}
             <div className={`
                 absolute bottom-0 left-0 right-0 h-[50vh] 
-                bg-gradient-to-t from-[#1a0505] via-[#1a0505]/95 to-[#ef4444]/10
+                bg-gradient-to-t from-[#1a0505] via-[#1a0505]/80 to-[#ef4444]/10
                 flex flex-col items-center justify-start
                 transform transition-all duration-500 cubic-bezier(0.22, 1, 0.36, 1)
                 ${stage >= 1 ? 'translate-y-0' : 'translate-y-full'}
                 z-10 pt-16
             `}>
-                 {/* Border Glow Line */}
                  <div className="absolute top-0 left-0 right-0 h-[2px] bg-[#ef4444] shadow-[0_0_30px_#ef4444] z-20"></div>
-
-                 {/* Players */}
                  {renderTeamGrid(crimsonTeam, 'red')}
-
-                 {/* Team Label */}
                  <div className="absolute bottom-[25%] flex flex-col items-center">
                      <div className="text-[#ef4444] text-xs font-orbitron tracking-[0.5em] opacity-70 mb-2">LEGION</div>
-                     <h2 className="text-4xl md:text-6xl font-cinzel font-black text-transparent bg-clip-text bg-gradient-to-b from-[#ef4444] to-[#7f1d1d] tracking-[0.2em] drop-shadow-[0_0_20px_rgba(239,68,68,0.5)]">
-                        CRIMSON
-                     </h2>
+                     <h2 className="text-4xl md:text-6xl font-cinzel font-black text-transparent bg-clip-text bg-gradient-to-b from-[#ef4444] to-[#7f1d1d] tracking-[0.2em] drop-shadow-[0_0_20px_rgba(239,68,68,0.5)]">CRIMSON</h2>
                  </div>
             </div>
 
-
-            {/* --- CENTER UI (VS) --- */}
+            {/* CENTER UI (VS) */}
             <div className={`
                 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[50]
                 flex items-center justify-center transform transition-all duration-300
                 ${stage >= 2 ? 'scale-100 opacity-100' : 'scale-0 opacity-0'}
             `}>
-                {/* Shockwave Ring */}
                 <div className={`absolute inset-0 border-2 border-[#dcb06b] rounded-full opacity-0 ${stage === 2 ? 'animate-[ping_1s_cubic-bezier(0,0,0.2,1)_infinite]' : ''}`}></div>
-
-                {/* Energy Core */}
                 <div className="relative w-24 h-24 md:w-32 md:h-32 flex items-center justify-center">
-                    {/* Rotating Diamond Back */}
                     <div className="absolute inset-0 bg-[#05090f] rotate-45 border-2 border-[#dcb06b] shadow-[0_0_40px_rgba(220,176,107,0.5)] animate-[spin_8s_linear_infinite]"></div>
-                    {/* Static Diamond Front */}
                     <div className="absolute inset-2 border border-[#dcb06b]/50 rotate-45 bg-black/40 backdrop-blur-sm"></div>
-                    
-                    {/* Text */}
-                    <span className="relative z-10 text-transparent bg-clip-text bg-gradient-to-br from-[#f3dcb1] to-[#dcb06b] font-orbitron font-black text-4xl md:text-5xl italic drop-shadow-sm pr-1 pt-1">
-                        VS
-                    </span>
-                    
-                    {/* Decorative Horizontal Lines */}
+                    <span className="relative z-10 text-transparent bg-clip-text bg-gradient-to-br from-[#f3dcb1] to-[#dcb06b] font-orbitron font-black text-4xl md:text-5xl italic drop-shadow-sm pr-1 pt-1">VS</span>
                     <div className="absolute top-1/2 left-[-40px] w-10 h-[2px] bg-gradient-to-l from-[#dcb06b] to-transparent"></div>
                     <div className="absolute top-1/2 right-[-40px] w-10 h-[2px] bg-gradient-to-r from-[#dcb06b] to-transparent"></div>
                 </div>
             </div>
 
-
-            {/* --- HUD ELEMENTS --- */}
+            {/* HUD ELEMENTS */}
             
-            {/* 1. Timer (Top Right HUD) */}
+            {/* STREAM CONTROLS (Moved to Top Right) */}
             <div className={`
-                absolute top-8 right-8 z-[60]
-                transition-all duration-700 delay-500
+                absolute top-8 right-8 z-[70] pointer-events-auto
+                transition-all duration-700 delay-500 flex gap-2
                 ${stage >= 2 ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-10'}
             `}>
-                <div className="relative bg-[#05090f]/90 border border-[#dcb06b]/40 px-6 py-2 clip-corner-sm shadow-[0_0_20px_rgba(0,0,0,0.8)] group">
-                     {/* HUD Decoration Lines */}
-                     <div className="absolute top-0 right-0 w-2 h-2 border-t border-r border-[#dcb06b]"></div>
-                     <div className="absolute bottom-0 left-0 w-2 h-2 border-b border-l border-[#dcb06b]"></div>
+                {/* Watch Button (Only if video exists) */}
+                {videoId && (
+                     <button 
+                        onClick={() => setShowPlayer(true)}
+                        className="relative bg-[#05090f]/90 border border-red-500/60 px-6 py-2 clip-corner-sm shadow-[0_0_20px_rgba(239,68,68,0.4)] group hover:bg-red-500/10 transition-colors flex items-center gap-3"
+                    >
+                         <div className="absolute top-0 left-0 w-2 h-2 border-t border-l border-red-500"></div>
+                         <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-red-500"></div>
+                         
+                         <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_5px_red]"></div>
+                         <span className="text-red-500 text-[10px] font-orbitron tracking-[0.2em] uppercase font-bold group-hover:text-white transition-colors">
+                            WATCH LIVE
+                         </span>
+                    </button>
+                )}
+
+                {/* Config Button */}
+                <button 
+                    onClick={() => setShowConfig(true)}
+                    className={`relative bg-[#05090f]/90 border ${videoId ? 'border-[#dcb06b]/40 px-3' : 'border-[#dcb06b]/40 px-6'} py-2 clip-corner-sm shadow-[0_0_20px_rgba(0,0,0,0.8)] group hover:bg-[#dcb06b]/10 transition-colors`}
+                    title="Configure Stream"
+                >
+                     {!videoId && (
+                        <>
+                         <div className="absolute top-0 left-0 w-2 h-2 border-t border-l border-[#dcb06b]"></div>
+                         <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-[#dcb06b]"></div>
+                        </>
+                     )}
                      
-                     <div className="flex items-center gap-2 mb-1 justify-end">
-                        <div className="w-1.5 h-1.5 bg-[#dcb06b] rounded-full animate-pulse shadow-[0_0_5px_#dcb06b]"></div>
-                        <span className="text-[#dcb06b] text-[10px] font-orbitron tracking-[0.2em] uppercase font-bold">SYSTEM READY</span>
+                     <div className="flex items-center gap-2">
+                        {!videoId && <div className="w-2 h-2 bg-gray-500 rounded-full shadow-[0_0_5px_gray]"></div>}
+                        {videoId ? (
+                            // Gear Icon for Config when video exists
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-[#8a9db8] group-hover:text-[#dcb06b]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                        ) : (
+                            <span className="text-[#8a9db8] group-hover:text-[#dcb06b] text-[10px] font-orbitron tracking-[0.2em] uppercase font-bold">
+                                LINK STREAM
+                            </span>
+                        )}
                     </div>
-                    <div className="text-white font-mono text-4xl font-bold tracking-widest leading-none text-right tabular-nums drop-shadow-md">
-                       {formatTime(elapsedSeconds)}
-                    </div>
-                </div>
+                </button>
             </div>
 
-            {/* 2. Enter Button (Bottom Center) */}
+            {/* Enter Button (Bottom Center) */}
             <div className={`
-                absolute bottom-10 left-1/2 -translate-x-1/2 z-[60] w-full max-w-md px-6
+                absolute bottom-10 left-1/2 -translate-x-1/2 z-[60] w-full max-w-md px-6 pointer-events-auto
                 transform transition-all duration-700 delay-300
                 ${stage >= 2 ? 'translate-y-0 opacity-100' : 'translate-y-20 opacity-0'}
             `}>
@@ -266,10 +255,83 @@ export const PortalTransition: React.FC<PortalTransitionProps> = ({ onComplete, 
                     ENTER BATTLEFIELD
                 </Button>
             </div>
-
         </div>
 
-        {/* Global Keyframes for this component */}
+        {/* --- CONFIG MODAL --- */}
+        {showConfig && (
+            <div className="absolute inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-slide-in pointer-events-auto">
+                <div className="absolute inset-0" onClick={() => setShowConfig(false)}></div>
+                <div className="relative w-full max-w-md bg-[#0a1a2f] border border-[#dcb06b] clip-corner-md p-6 shadow-[0_0_50px_rgba(220,176,107,0.3)]">
+                    <h3 className="text-[#dcb06b] font-cinzel font-bold text-lg mb-2 text-center tracking-widest">ESTABLISH LIVE FEED</h3>
+                    <p className="text-[#4a5f78] text-[10px] text-center mb-6 font-orbitron tracking-wide">PASTE YOUTUBE VIDEO OR STREAM LINK</p>
+                    <form onSubmit={handleStreamSubmit}>
+                        <input 
+                            type="text" 
+                            value={streamUrl} 
+                            onChange={e => setStreamUrl(e.target.value)} 
+                            className="w-full bg-black/50 border border-[#1e3a5f] p-3 text-white font-orbitron focus:border-[#dcb06b] outline-none mb-6 text-center placeholder-[#1e3a5f]"
+                            placeholder="https://youtube.com/..."
+                            autoFocus
+                        />
+                        <div className="flex gap-3">
+                            <Button type="button" variant="secondary" onClick={() => setShowConfig(false)} className="flex-1">CANCEL</Button>
+                            <Button type="submit" className="flex-1">{videoId ? 'UPDATE' : 'CONNECT'}</Button>
+                        </div>
+                        {videoId && (
+                            <button type="button" onClick={() => { setVideoId(null); setStreamUrl(''); setShowConfig(false); }} className="w-full mt-3 py-2 text-[10px] text-red-500 hover:text-red-400 font-bold uppercase tracking-widest">
+                                TERMINATE FEED
+                            </button>
+                        )}
+                    </form>
+                </div>
+            </div>
+        )}
+
+        {/* --- VIDEO PLAYER MODAL (HIGHLIGHT POPUP) --- */}
+        {showPlayer && videoId && (
+            <div className="absolute inset-0 z-[200] bg-black/95 backdrop-blur-xl flex items-center justify-center p-4 md:p-10 animate-fade-in pointer-events-auto">
+                {/* Close Overlay */}
+                <div className="absolute inset-0" onClick={() => setShowPlayer(false)}></div>
+                
+                {/* Player Container */}
+                <div className="relative w-full max-w-6xl aspect-video bg-black border border-[#dcb06b] shadow-[0_0_100px_rgba(220,176,107,0.2)] clip-corner-md z-10">
+                    <iframe 
+                        width="100%" 
+                        height="100%" 
+                        src={`https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&rel=0&modestbranding=1`} 
+                        title="Live Stream" 
+                        frameBorder="0" 
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                        allowFullScreen
+                        className="w-full h-full"
+                    ></iframe>
+
+                    {/* Header Bar overlay on hover */}
+                    <div className="absolute top-0 left-0 right-0 h-12 bg-gradient-to-b from-black/80 to-transparent flex items-center justify-between px-4 opacity-0 hover:opacity-100 transition-opacity duration-300 pointer-events-none">
+                        <div className="flex items-center gap-2 pointer-events-auto">
+                           <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                           <span className="text-white text-[10px] font-orbitron tracking-widest">LIVE FEED</span>
+                        </div>
+                        <button onClick={() => setShowPlayer(false)} className="text-white hover:text-[#dcb06b] pointer-events-auto">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                    </div>
+
+                    {/* Close Button Outside (Top Right) */}
+                    <button 
+                        onClick={() => setShowPlayer(false)}
+                        className="absolute -top-12 right-0 text-white/50 hover:text-white transition-colors flex items-center gap-2"
+                    >
+                        <span className="text-[10px] font-orbitron tracking-widest">CLOSE PLAYER</span>
+                        <div className="border border-white/30 rounded-full p-1">
+                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </div>
+                    </button>
+                </div>
+            </div>
+        )}
+
+        {/* Global Keyframes */}
         <style>{`
             @keyframes impact-flash { 0% { opacity: 0; } 50% { opacity: 0.8; } 100% { opacity: 0; } }
             @keyframes clash-shake {
@@ -277,6 +339,7 @@ export const PortalTransition: React.FC<PortalTransitionProps> = ({ onComplete, 
                 10%, 30%, 50%, 70%, 90% { transform: translate(-4px, -4px); }
                 20%, 40%, 60%, 80% { transform: translate(4px, 4px); }
             }
+            @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
         `}</style>
     </div>
   );

@@ -13,6 +13,8 @@ import { LocalClock } from './components/LocalClock';
 import { ConfirmModal } from './components/ConfirmModal';
 import { BracketDisplay } from './components/BracketDisplay';
 import { PreparingModal } from './components/PreparingModal';
+import { CookieConsent } from './components/CookieConsent';
+import { setCookie, getCookie, eraseCookie } from './utils/cookies';
 
 const HOK_HEROES = [
   // CLASH LANE
@@ -124,14 +126,18 @@ type ViewMode = 'lobby' | 'match' | 'battle' | 'bracket';
 // Persistence Keys
 const STORAGE_KEY_PLAYERS = 'hok_roster_data_v2';
 const STORAGE_KEY_HISTORY = 'hok_match_history_v2';
+const STORAGE_KEY_ACTIVE_MATCH = 'hok_active_match_session';
+const STORAGE_KEY_ACTIVE_BRACKET = 'hok_active_bracket_session';
+const COOKIE_CONSENT_KEY = 'hok_cookie_consent_accepted';
 
-// Helper for cinematic delay
 const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
 export default function App() {
   const [viewMode, setViewMode] = useState<ViewMode>('lobby');
+  const [showCookieConsent, setShowCookieConsent] = useState(false);
   
-  // Initialize from LocalStorage or Hash
+  // --- STATE INITIALIZATION WITH COOKIES (NOW LOCAL STORAGE) ---
+
   const [players, setPlayers] = useState<Player[]>(() => {
     try {
       if (window.location.hash && window.location.hash.length > 1) {
@@ -139,43 +145,48 @@ export default function App() {
         const decoded = JSON.parse(atob(hashData));
         if (Array.isArray(decoded)) return decoded;
       }
-      
-      const saved = localStorage.getItem(STORAGE_KEY_PLAYERS);
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      console.warn("Failed to load players from storage/hash", e);
-      // Fallback to local storage if hash fails
-      const saved = localStorage.getItem(STORAGE_KEY_PLAYERS);
-      return saved ? JSON.parse(saved) : [];
-    }
-  });
-
-  const [matchHistory, setMatchHistory] = useState<MatchHistoryEntry[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_HISTORY);
+      const saved = getCookie(STORAGE_KEY_PLAYERS);
       return saved ? JSON.parse(saved) : [];
     } catch (e) {
       return [];
     }
   });
 
-  const [currentMatch, setCurrentMatch] = useState<MatchResult | null>(null);
-  const [bracketMatch, setBracketMatch] = useState<BracketMatchResult | null>(null);
+  const [matchHistory, setMatchHistory] = useState<MatchHistoryEntry[]>(() => {
+    try {
+      const saved = getCookie(STORAGE_KEY_HISTORY);
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) { return []; }
+  });
+
+  // Load Active Sessions
+  const [currentMatch, setCurrentMatch] = useState<MatchResult | null>(() => {
+      try {
+          const saved = getCookie(STORAGE_KEY_ACTIVE_MATCH);
+          return saved ? JSON.parse(saved) : null;
+      } catch (e) { return null; }
+  });
+
+  const [bracketMatch, setBracketMatch] = useState<BracketMatchResult | null>(() => {
+      try {
+          const saved = getCookie(STORAGE_KEY_ACTIVE_BRACKET);
+          return saved ? JSON.parse(saved) : null;
+      } catch (e) { return null; }
+  });
+
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [roomId, setRoomId] = useState<string>('');
   const [isCoachMode, setIsCoachMode] = useState(false);
   const [isBracketMode, setIsBracketMode] = useState(false);
   const [numBracketTeams, setNumBracketTeams] = useState(4);
-  const [isSetupOpen, setIsSetupOpen] = useState(false); // New State for Overlay
+  const [isSetupOpen, setIsSetupOpen] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-  // Preparation / Validation State
   const [isPreparing, setIsPreparing] = useState(false);
   const [prepMessage, setPrepMessage] = useState("");
   const [prepError, setPrepError] = useState<string | null>(null);
 
-  // Confirmation Modal State
   const [confirmState, setConfirmState] = useState<{
     isOpen: boolean;
     title: string;
@@ -189,12 +200,65 @@ export default function App() {
     onConfirm: () => {},
   });
 
-  // Sync Players to LocalStorage & URL Hash
+  // --- FULLSCREEN LOGIC ---
+  const enableFullscreen = useCallback(() => {
+    const elem = document.documentElement;
+    if (!document.fullscreenElement) {
+        // Support for standard and older vendor-prefixed methods
+        const req = elem.requestFullscreen || (elem as any).webkitRequestFullscreen || (elem as any).msRequestFullscreen;
+        if (req) {
+            req.call(elem).catch((err: any) => console.log("Fullscreen request blocked or failed:", err));
+        }
+    }
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+        enableFullscreen();
+    } else {
+        if (document.exitFullscreen) {
+            document.exitFullscreen();
+        }
+    }
+  }, [enableFullscreen]);
+
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_PLAYERS, JSON.stringify(players));
-    
+      // Attempt to enter fullscreen on the first interaction
+      const activate = () => {
+          enableFullscreen();
+          // Remove listeners once activated
+          window.removeEventListener('click', activate);
+          window.removeEventListener('touchstart', activate);
+          window.removeEventListener('keydown', activate);
+      };
+
+      window.addEventListener('click', activate);
+      window.addEventListener('touchstart', activate);
+      window.addEventListener('keydown', activate);
+
+      return () => {
+          window.removeEventListener('click', activate);
+          window.removeEventListener('touchstart', activate);
+          window.removeEventListener('keydown', activate);
+      };
+  }, [enableFullscreen]);
+
+  // --- EFFECT HOOKS FOR PERSISTENCE ---
+
+  useEffect(() => {
+    const hasConsented = getCookie(COOKIE_CONSENT_KEY);
+    if (!hasConsented) setShowCookieConsent(true);
+  }, []);
+
+  const handleAcceptCookies = () => {
+    setCookie(COOKIE_CONSENT_KEY, 'true', 365);
+    setShowCookieConsent(false);
+    enableFullscreen(); // Trigger fullscreen explicitly on consent click
+  };
+
+  useEffect(() => {
+    setCookie(STORAGE_KEY_PLAYERS, JSON.stringify(players), 30);
     try {
-      // Create a compact version of state for hashing to avoid URL length limits
       const compactData = players.map(p => ({
         id: p.id,
         name: p.name,
@@ -204,16 +268,37 @@ export default function App() {
         stats: p.stats
       }));
       const hash = btoa(JSON.stringify(compactData));
-      if (hash.length < 2000) {
+      // Increased hash limit to prevent URL updates from stopping for large rosters
+      if (hash.length < 50000) {
          window.history.replaceState(null, '', `#${hash}`);
       }
     } catch (e) {}
   }, [players]);
 
-  // Sync History to LocalStorage
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(matchHistory));
+    setCookie(STORAGE_KEY_HISTORY, JSON.stringify(matchHistory), 30);
   }, [matchHistory]);
+
+  // Persist Active Match
+  useEffect(() => {
+      if (currentMatch) {
+          setCookie(STORAGE_KEY_ACTIVE_MATCH, JSON.stringify(currentMatch), 1); // 1 day expire
+      } else {
+          eraseCookie(STORAGE_KEY_ACTIVE_MATCH);
+      }
+  }, [currentMatch]);
+
+  // Persist Active Bracket
+  useEffect(() => {
+      if (bracketMatch) {
+          setCookie(STORAGE_KEY_ACTIVE_BRACKET, JSON.stringify(bracketMatch), 1);
+      } else {
+          eraseCookie(STORAGE_KEY_ACTIVE_BRACKET);
+      }
+  }, [bracketMatch]);
+
+
+  // --- NAVIGATION HANDLERS ---
 
   const navigate = useCallback((mode: ViewMode, data: any) => {
     setViewMode(mode);
@@ -221,6 +306,24 @@ export default function App() {
     else if ((mode === 'match' || mode === 'battle') && data) setCurrentMatch(data);
     else if (mode === 'bracket' && data) setBracketMatch(data);
   }, []);
+
+  // New: Minimize/Back to Lobby (Preserves Session)
+  const handleBackToLobby = () => {
+      setViewMode('lobby');
+  };
+
+  // New: Resume Session
+  const handleResumeSession = () => {
+      if (currentMatch) {
+          setViewMode('match');
+      } else if (bracketMatch) {
+          setViewMode('bracket');
+      }
+  };
+
+  const hasActiveSession = !!currentMatch || !!bracketMatch;
+
+  // --- GAME LOGIC ---
 
   const handleBatchProcess = (batchData: { name: string; roles: Role[]; isAllRoles: boolean; action?: 'add' | 'bench' }[]) => {
     setPlayers(prev => {
@@ -232,12 +335,7 @@ export default function App() {
            if (existingIndex !== -1) updatedPlayers[existingIndex] = { ...updatedPlayers[existingIndex], isActive: false };
         } else {
            if (existingIndex !== -1) {
-              updatedPlayers[existingIndex] = { 
-                ...updatedPlayers[existingIndex], 
-                roles: item.roles, 
-                isAllRoles: item.isAllRoles, 
-                isActive: true 
-              };
+              updatedPlayers[existingIndex] = { ...updatedPlayers[existingIndex], roles: item.roles, isAllRoles: item.isAllRoles, isActive: true };
            } else {
               updatedPlayers.push({
                  id: crypto.randomUUID(),
@@ -262,8 +360,6 @@ export default function App() {
   
   const handleUpdatePlayer = (updatedPlayer: Player) => {
     setPlayers(prev => prev.map(p => p.id === updatedPlayer.id ? updatedPlayer : p));
-    
-    // Also sync the name change to current active matches/brackets if applicable
     if (currentMatch) {
        setCurrentMatch(prev => {
           if (!prev) return null;
@@ -274,7 +370,6 @@ export default function App() {
           };
        });
     }
-
     if (bracketMatch) {
        setBracketMatch(prev => {
           if (!prev) return null;
@@ -292,111 +387,72 @@ export default function App() {
   const activePlayers = players.filter(p => p.isActive);
 
   const handleGenerate = async () => {
-    // 1. Initial Validation Checks
     if (!isBracketMode) {
-      if (!roomId.trim() || roomId.length < 4) { 
-        setErrorMsg("Please enter a valid 4-digit Room ID."); 
-        return; 
-      }
+      if (!roomId.trim() || roomId.length < 4) { setErrorMsg("Please enter a valid 4-digit Room ID."); return; }
     }
     
-    // 2. Open Loading/Validation Modal
+    // Clear any existing session when starting new
+    setCurrentMatch(null);
+    setBracketMatch(null);
+
     setErrorMsg(null);
     setIsPreparing(true);
     setPrepError(null);
     setPrepMessage("CONNECTING TO SERVER...");
 
     try {
-        // Cinematic Delay 1: Analysis
         await delay(1000);
         setPrepMessage("SCANNING ACTIVE ROSTER...");
-        
-        // Cinematic Delay 2: Calculation
         await delay(1200);
         setPrepMessage("VALIDATING ROLE COMPATIBILITY...");
-
         await delay(800);
 
-        // 3. Execution Logic
         if (isBracketMode) {
-            // Strictly validate if the roster can support the tournament
             const validation = validateBracketPool(activePlayers, numBracketTeams);
-            if (!validation.valid) {
-                throw new Error(validation.error);
-            }
+            if (!validation.valid) throw new Error(validation.error);
 
-            // Generate full valid assignment
             const result = generateBracketMatch(activePlayers, roomId, numBracketTeams);
-            
             if (result) { 
                 setPrepMessage("GENERATING TOURNAMENT BRACKET...");
                 await delay(800);
                 setBracketMatch(result); 
                 setViewMode('bracket'); 
-                setIsSetupOpen(false); // Close setup on success
-            } else { 
-                throw new Error("FAILED TO GENERATE BRACKET STRUCTURE."); 
-            }
+                setIsSetupOpen(false);
+            } else { throw new Error("FAILED TO GENERATE BRACKET STRUCTURE."); }
         } else {
             const required = isCoachMode ? 12 : 10;
-            if (activePlayers.length < required) { 
-                throw new Error(`INSUFFICIENT PLAYERS: Need ${required} active players for this mode. Current: ${activePlayers.length}`); 
-            }
+            if (activePlayers.length < required) throw new Error(`INSUFFICIENT PLAYERS: Need ${required} active players.`);
             
-            // Attempt to generate match
-            // generateMatch does the internal backtracking validation
             const result = generateMatch(activePlayers, roomId, isCoachMode);
-            
             if (result) { 
                 setPrepMessage("FINALIZING BATTLE DATA...");
                 await delay(800);
                 setCurrentMatch(result); 
                 navigate('match', result); 
-                setIsSetupOpen(false); // Close setup on success
-            } else { 
-                throw new Error("IMPOSSIBLE COMPOSITION: Unable to satisfy all role requirements with the current active players. Please adjust roles or add flex players."); 
-            }
+                setIsSetupOpen(false);
+            } else { throw new Error("IMPOSSIBLE COMPOSITION: Unable to satisfy all role requirements."); }
         }
-        
-        // Close modal on success (navigation happens in logic above)
         setIsPreparing(false);
-
     } catch (err: any) {
         setPrepError(err.message || "Unknown Error Occurred");
-        // Keep modal open to show error
     }
   };
 
   const handleExportRoster = () => {
-    if (players.length === 0) {
-        alert("Roster is empty.");
-        return;
-    }
-    
+    if (players.length === 0) { alert("Roster is empty."); return; }
     const lines = players.map(p => {
         const name = p.name.trim();
-        if (p.isAllRoles) {
-            return `${name} : All Role`;
-        }
-        // Map roles to simple strings
-        const roles = p.roles.map(r => {
-            if (r === Role.JUNGLE) return 'Jungle';
-            return r;
-        }).join(', ');
-        
+        const roles = p.isAllRoles ? 'All Role' : p.roles.map(r => r === Role.JUNGLE ? 'Jungle' : r).join(', ');
         return `${name} : ${roles}`;
     });
-    
-    navigator.clipboard.writeText(lines.join('\n')).then(() => {
-        alert("Roster saved to clipboard!");
-    });
+    navigator.clipboard.writeText(lines.join('\n')).then(() => alert("Roster saved to clipboard!"));
   };
 
   const handleClearAll = () => {
     setConfirmState({
       isOpen: true,
       title: "CLEAR ROSTER",
-      message: "This will permanently delete ALL players from your squad list. Are you sure you want to proceed?",
+      message: "This will permanently delete ALL players from your squad list.",
       isDestructive: true,
       onConfirm: () => setPlayers([]),
     });
@@ -416,10 +472,7 @@ export default function App() {
     if (!bracketMatch) return;
     const updatedTeams = bracketMatch.teams.map((team, idx) => {
         if (idx === teamIndex) {
-            return {
-                ...team,
-                slots: team.slots.map(slot => slot.role === role ? { ...slot, player: newPlayer } : slot)
-            };
+            return { ...team, slots: team.slots.map(slot => slot.role === role ? { ...slot, player: newPlayer } : slot) };
         }
         return team;
     });
@@ -449,18 +502,15 @@ export default function App() {
            if (newStats.currentStreak > newStats.maxStreak) newStats.maxStreak = newStats.currentStreak;
         } else { newStats.currentStreak = 0; }
       }
-
-      return { 
-        ...p, 
-        stats: newStats, 
-        isLastMatchMvp, 
-        lastMatchRating: ratings?.[p.id] || 0 
-      };
+      return { ...p, stats: newStats, isLastMatchMvp, lastMatchRating: ratings?.[p.id] || 0 };
     });
     
     setPlayers(updatedPlayers); 
-    navigate('lobby', updatedPlayers);
+    // Clear Active Match Session
     setCurrentMatch(null); 
+    eraseCookie(STORAGE_KEY_ACTIVE_MATCH);
+
+    navigate('lobby', updatedPlayers);
     setRoomId('');
   };
 
@@ -479,7 +529,7 @@ export default function App() {
     setConfirmState({
       isOpen: true,
       title: "ERASE HISTORY",
-      message: "This will permanently delete all recorded battle logs. This action cannot be undone.",
+      message: "This will permanently delete all recorded battle logs.",
       isDestructive: true,
       onConfirm: () => setMatchHistory([]),
     });
@@ -487,23 +537,12 @@ export default function App() {
 
   const isRoomReady = roomId.length === 4;
 
-  const copyShareLink = () => {
-    navigator.clipboard.writeText(window.location.href);
-    alert("Share link copied to clipboard!");
-  };
-
   return (
     <div className="min-h-screen text-slate-200 font-inter overflow-x-hidden relative flex flex-col">
       <BackgroundParticles />
       <LocalClock />
       
-      <PreparingModal 
-        isOpen={isPreparing} 
-        message={prepMessage} 
-        error={prepError} 
-        onClose={() => setIsPreparing(false)} 
-      />
-
+      <PreparingModal isOpen={isPreparing} message={prepMessage} error={prepError} onClose={() => setIsPreparing(false)} />
       <ConfirmModal 
         isOpen={confirmState.isOpen}
         title={confirmState.title}
@@ -512,7 +551,8 @@ export default function App() {
         onCancel={() => setConfirmState(prev => ({ ...prev, isOpen: false }))}
         isDestructive={confirmState.isDestructive}
       />
-      
+      {showCookieConsent && <CookieConsent onAccept={handleAcceptCookies} />}
+
       <div className="fixed inset-0 bg-black -z-10">
          <img src="https://www.levelinfinite.com/wp-content/uploads/2024/03/honor-of-kings-global-launch-pc.jpg" alt="HoK" className="absolute inset-0 w-full h-full object-cover opacity-50" />
          <div className="absolute inset-0 bg-gradient-to-b from-[#05090f]/90 via-[#05090f]/60 to-[#05090f] mix-blend-multiply"></div>
@@ -524,12 +564,37 @@ export default function App() {
         <>
           <main className="relative z-10 pt-16 px-4 flex-grow max-w-7xl mx-auto w-full">
             
+            {/* --- RESUME BANNER --- */}
+            {hasActiveSession && (
+                <div className="mb-6 animate-slide-in">
+                    <button 
+                        onClick={handleResumeSession}
+                        className="w-full bg-[#0a1a2f]/90 border border-[#dcb06b] clip-corner-md p-6 flex items-center justify-between group hover:bg-[#dcb06b]/10 transition-colors shadow-[0_0_20px_rgba(220,176,107,0.2)]"
+                    >
+                         <div className="flex items-center gap-4">
+                             <div className="w-12 h-12 flex items-center justify-center bg-[#dcb06b]/20 rounded-full border border-[#dcb06b] animate-pulse">
+                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-[#dcb06b]" viewBox="0 0 20 20" fill="currentColor">
+                                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                                 </svg>
+                             </div>
+                             <div className="text-left">
+                                 <h3 className="text-[#dcb06b] font-cinzel font-bold text-xl tracking-widest">SESSION IN PROGRESS</h3>
+                                 <p className="text-[#8a9db8] font-orbitron text-xs tracking-wide">
+                                     {currentMatch ? 'RANKED DRAFT • BATTLEFIELD' : 'TOURNAMENT BRACKET • MANAGEMENT'}
+                                 </p>
+                             </div>
+                         </div>
+                         <div className="text-[#dcb06b] font-bold font-orbitron tracking-[0.2em] group-hover:translate-x-2 transition-transform">
+                             RESUME &gt;&gt;
+                         </div>
+                    </button>
+                </div>
+            )}
+
             {/* FULL SCREEN BATTLE COMMAND OVERLAY */}
             {isSetupOpen && (
               <div className="fixed inset-0 z-[100] bg-[#05090f]/95 backdrop-blur-xl flex items-center justify-center p-2 md:p-4 animate-slide-in">
                  <div className="w-full max-w-2xl bg-[#0a1a2f] border border-[#dcb06b] clip-corner-md relative shadow-[0_0_100px_rgba(0,0,0,0.8)] max-h-[95vh] flex flex-col">
-                    
-                    {/* Header */}
                     <div className="flex items-center justify-between p-4 md:p-6 border-b border-[#1e3a5f] bg-[#05090f]/50 shrink-0">
                        <h2 className="text-[#dcb06b] font-cinzel font-black text-lg md:text-xl tracking-[0.2em] flex items-center gap-3">
                           <div className="w-2 h-6 md:h-8 bg-[#dcb06b]"></div>
@@ -541,10 +606,7 @@ export default function App() {
                     </div>
 
                     <div className="p-4 md:p-8 space-y-6 md:space-y-8 overflow-y-auto custom-scrollbar">
-                        
-                        {/* INTEGRATED ROOM ID CARD */}
                         {isBracketMode ? (
-                          // MINIMIZED BATTLE ROOM FOR BRACKET MODE
                           <div className="relative group opacity-80">
                             <div className="absolute -inset-[1px] bg-gradient-to-b from-white/10 to-transparent clip-corner-sm opacity-20"></div>
                             <div className="bg-[#0a1a2f]/60 backdrop-blur-sm p-4 clip-corner-sm border border-[#1e3a5f] relative">
@@ -555,176 +617,70 @@ export default function App() {
                                   </div>
                                   <span className="text-[9px] px-2 py-0.5 border border-white/10 rounded text-white/40 font-bold">AUTO-ASSIGN</span>
                               </div>
-                              <div className="mt-2 text-[10px] text-[#4a5f78] font-orbitron tracking-wide leading-tight">
-                                  Room IDs will be assigned individually per match within the Bracket View.
-                              </div>
+                              <div className="mt-2 text-[10px] text-[#4a5f78] font-orbitron tracking-wide leading-tight">Room IDs will be assigned individually per match.</div>
                             </div>
                           </div>
                         ) : (
-                          // STANDARD BATTLE ROOM CARD
                           <div className="relative group">
                             <div className="absolute -inset-[1px] bg-gradient-to-b from-[#dcb06b]/50 to-transparent clip-corner-md opacity-30"></div>
                             <div className="bg-[#0a1a2f]/90 backdrop-blur-md p-6 clip-corner-md relative overflow-hidden">
                               <div className="flex items-center justify-between mb-4 border-b border-[#dcb06b]/20 pb-2">
                                 <h3 className="text-sm text-[#dcb06b] font-cinzel font-bold tracking-[0.2em] uppercase">Battle Room</h3>
-                                <span className={`text-[10px] font-orbitron font-bold transition-colors duration-300 ${isRoomReady ? 'text-green-500' : 'text-red-500'}`}>
-                                  LOBBY STATUS: {isRoomReady ? 'READY' : 'NOT READY'}
-                                </span>
+                                <span className={`text-[10px] font-orbitron font-bold transition-colors duration-300 ${isRoomReady ? 'text-green-500' : 'text-red-500'}`}>LOBBY STATUS: {isRoomReady ? 'READY' : 'NOT READY'}</span>
                               </div>
-                              
-                              <div className="relative">
-                                <input 
-                                  type="text" 
-                                  value={roomId} 
-                                  onChange={(e) => setRoomId(e.target.value.replace(/\D/g,'').slice(0,4))} 
-                                  placeholder="0000" 
-                                  className={`relative z-10 bg-black/40 border border-[#1e3a5f] p-4 text-3xl md:text-5xl font-orbitron font-black w-full text-center focus:outline-none tracking-[0.4em] transition-all duration-300 clip-corner-sm
-                                    ${roomId ? 'text-white border-[#dcb06b] shadow-[0_0_15px_rgba(220,176,107,0.2)] animate-[chromatic_0.2s_infinite]' : 'text-[#4a5f78] opacity-60'}
-                                    placeholder-[#1e3a5f]`}
-                                />
-                              </div>
+                              <div className="relative"><input type="text" value={roomId} onChange={(e) => setRoomId(e.target.value.replace(/\D/g,'').slice(0,4))} placeholder="0000" className={`relative z-10 bg-black/40 border border-[#1e3a5f] p-4 text-3xl md:text-5xl font-orbitron font-black w-full text-center focus:outline-none tracking-[0.4em] transition-all duration-300 clip-corner-sm ${roomId ? 'text-white border-[#dcb06b] shadow-[0_0_15px_rgba(220,176,107,0.2)] animate-[chromatic_0.2s_infinite]' : 'text-[#4a5f78] opacity-60'} placeholder-[#1e3a5f]`} /></div>
                             </div>
                           </div>
                         )}
-
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {/* COACH MODE BUTTON */}
                           {!isBracketMode && (
-                            <button 
-                              onClick={() => setIsCoachMode(!isCoachMode)}
-                              className="relative w-full group overflow-hidden p-[3px] clip-corner-sm transition-all duration-300 transform hover:scale-[1.01] active:scale-[0.98]"
-                            >
-                              {isCoachMode && (
-                                <div className="absolute inset-[-100%] transition-opacity duration-700">
-                                    <div className="absolute inset-0 bg-[conic-gradient(from_0deg,transparent_0deg,#dcb06b_60deg,#f3dcb1_120deg,transparent_180deg,#dcb06b_240deg,#f3dcb1_300deg,transparent_360deg)] animate-[spin_3s_linear_infinite]"></div>
-                                </div>
-                              )}
-                              <div className={`
-                                  relative z-10 py-4 px-6 flex items-center justify-center transition-all duration-300 clip-corner-sm border h-full
-                                  ${isCoachMode 
-                                      ? 'bg-black text-[#dcb06b] border-transparent shadow-[inset_0_0_20px_rgba(220,176,107,0.5)]' 
-                                      : 'bg-[#0a1a2f]/80 border-[#1e3a5f] text-[#4a5f78]'}
-                              `}>
-                                  <span className={`font-cinzel font-black text-xs tracking-[0.3em] uppercase transition-all duration-500 ${isCoachMode ? 'text-white drop-shadow-[0_0_10px_#dcb06b]' : ''}`}>
-                                    COACH MODE {isCoachMode ? 'ON' : 'OFF'}
-                                  </span>
-                              </div>
+                            <button onClick={() => setIsCoachMode(!isCoachMode)} className="relative w-full group overflow-hidden p-[3px] clip-corner-sm transition-all duration-300 transform hover:scale-[1.01] active:scale-[0.98]">
+                              {isCoachMode && <div className="absolute inset-[-100%] transition-opacity duration-700"><div className="absolute inset-0 bg-[conic-gradient(from_0deg,transparent_0deg,#dcb06b_60deg,#f3dcb1_120deg,transparent_180deg,#dcb06b_240deg,#f3dcb1_300deg,transparent_360deg)] animate-[spin_3s_linear_infinite]"></div></div>}
+                              <div className={`relative z-10 py-4 px-6 flex items-center justify-center transition-all duration-300 clip-corner-sm border h-full ${isCoachMode ? 'bg-black text-[#dcb06b] border-transparent shadow-[inset_0_0_20px_rgba(220,176,107,0.5)]' : 'bg-[#0a1a2f]/80 border-[#1e3a5f] text-[#4a5f78]'}`}><span className={`font-cinzel font-black text-xs tracking-[0.3em] uppercase transition-all duration-500 ${isCoachMode ? 'text-white drop-shadow-[0_0_10px_#dcb06b]' : ''}`}>COACH MODE {isCoachMode ? 'ON' : 'OFF'}</span></div>
                             </button>
                           )}
-
-                          {/* BRACKET MODE BUTTON - WHITE THEME */}
-                          <button 
-                            onClick={() => { setIsBracketMode(!isBracketMode); if(!isBracketMode) setIsCoachMode(false); }}
-                            className="relative w-full group overflow-hidden p-[3px] clip-corner-sm transition-all duration-300 transform hover:scale-[1.01] active:scale-[0.98]"
-                          >
-                            {isBracketMode && (
-                              <div className="absolute inset-[-100%] transition-opacity duration-700">
-                                  <div className="absolute inset-0 bg-[conic-gradient(from_0deg,transparent_0deg,#ffffff_60deg,#e2e8f0_120deg,transparent_180deg,#ffffff_240deg,#e2e8f0_300deg,transparent_360deg)] animate-[spin_3s_linear_infinite]"></div>
-                              </div>
-                            )}
-                            <div className={`
-                                relative z-10 py-4 px-6 flex items-center justify-center transition-all duration-300 clip-corner-sm border h-full
-                                ${isBracketMode 
-                                    ? 'bg-black text-white border-transparent shadow-[inset_0_0_20px_rgba(255,255,255,0.4)]' 
-                                    : 'bg-[#0a1a2f]/80 border-[#1e3a5f] text-[#4a5f78]'}
-                            `}>
-                                <span className={`font-cinzel font-black text-xs tracking-[0.3em] uppercase transition-all duration-500 ${isBracketMode ? 'text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.8)]' : ''}`}>
-                                  BRACKET MODE {isBracketMode ? 'ON' : 'OFF'}
-                                </span>
-                            </div>
+                          <button onClick={() => { setIsBracketMode(!isBracketMode); if(!isBracketMode) setIsCoachMode(false); }} className="relative w-full group overflow-hidden p-[3px] clip-corner-sm transition-all duration-300 transform hover:scale-[1.01] active:scale-[0.98]">
+                            {isBracketMode && <div className="absolute inset-[-100%] transition-opacity duration-700"><div className="absolute inset-0 bg-[conic-gradient(from_0deg,transparent_0deg,#ffffff_60deg,#e2e8f0_120deg,transparent_180deg,#ffffff_240deg,#e2e8f0_300deg,transparent_360deg)] animate-[spin_3s_linear_infinite]"></div></div>}
+                            <div className={`relative z-10 py-4 px-6 flex items-center justify-center transition-all duration-300 clip-corner-sm border h-full ${isBracketMode ? 'bg-black text-white border-transparent shadow-[inset_0_0_20px_rgba(255,255,255,0.4)]' : 'bg-[#0a1a2f]/80 border-[#1e3a5f] text-[#4a5f78]'}`}><span className={`font-cinzel font-black text-xs tracking-[0.3em] uppercase transition-all duration-500 ${isBracketMode ? 'text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.8)]' : ''}`}>BRACKET MODE {isBracketMode ? 'ON' : 'OFF'}</span></div>
                           </button>
                         </div>
-
-                        {/* BRACKET TEAM SELECTOR */}
                         {isBracketMode && (
                           <div className="relative animate-slide-in">
                             <div className="bg-[#0a1a2f]/80 border border-[#dcb06b]/30 p-4 clip-corner-sm">
-                                <div className="text-[10px] text-[#8a9db8] font-black uppercase tracking-widest mb-3 flex justify-between">
-                                  <span>Number of Teams</span>
-                                  <span className="text-white font-orbitron">{numBracketTeams} TEAMS</span>
-                                </div>
-                                <div className="flex gap-1">
-                                  {[3, 4, 5, 6, 8].map(n => (
-                                    <button 
-                                      key={n}
-                                      onClick={() => setNumBracketTeams(n)}
-                                      className={`flex-1 py-2 font-orbitron font-bold text-xs clip-corner-sm border transition-all ${numBracketTeams === n ? 'bg-[#dcb06b] text-black border-[#dcb06b] shadow-[0_0_10px_#dcb06b]' : 'bg-black/40 text-[#4a5f78] border-[#1e3a5f]'}`}
-                                    >
-                                      {n}
-                                    </button>
-                                  ))}
-                                </div>
+                                <div className="text-[10px] text-[#8a9db8] font-black uppercase tracking-widest mb-3 flex justify-between"><span>Number of Teams</span><span className="text-white font-orbitron">{numBracketTeams} TEAMS</span></div>
+                                <div className="flex gap-1">{[3, 4, 5, 6, 8].map(n => (<button key={n} onClick={() => setNumBracketTeams(n)} className={`flex-1 py-2 font-orbitron font-bold text-xs clip-corner-sm border transition-all ${numBracketTeams === n ? 'bg-[#dcb06b] text-black border-[#dcb06b] shadow-[0_0_10px_#dcb06b]' : 'bg-black/40 text-[#4a5f78] border-[#1e3a5f]'}`}>{n}</button>))}</div>
                                 <div className="mt-2 text-[8px] text-[#4a5f78] uppercase text-center font-bold tracking-widest">Requires {numBracketTeams * 5} active players</div>
                             </div>
                           </div>
                         )}
-
                         <PlayerForm onBatchProcess={handleBatchProcess} isCoachMode={isCoachMode} />
-                        
                         <div className="relative group">
                           <div className="absolute -inset-[1px] bg-gradient-to-b from-[#dcb06b]/50 to-transparent clip-corner-md opacity-30"></div>
                           <div className="bg-[#0a1a2f]/90 backdrop-blur-md p-6 clip-corner-md relative">
                             <div className="flex justify-between items-end mb-6">
-                                <div>
-                                  <div className="text-[#8a9db8] text-[10px] uppercase font-bold mb-1">Active Players</div>
-                                  <div className="flex items-baseline gap-2">
-                                      <div className="text-5xl font-orbitron font-bold text-white">{activePlayers.length}</div>
-                                      <div className="text-xl font-orbitron font-bold text-[#4a5f78]">/ {players.length}</div>
-                                  </div>
-                                </div>
+                                <div><div className="text-[#8a9db8] text-[10px] uppercase font-bold mb-1">Active Players</div><div className="flex items-baseline gap-2"><div className="text-5xl font-orbitron font-bold text-white">{activePlayers.length}</div><div className="text-xl font-orbitron font-bold text-[#4a5f78]">/ {players.length}</div></div></div>
                                 <button onClick={quickFill} className="text-[10px] text-[#dcb06b] border border-[#dcb06b] px-3 py-1 hover:bg-[#dcb06b] hover:text-black transition-colors">Quick Fill</button>
                             </div>
                             {errorMsg && <div className="mb-4 p-3 border-l-2 border-red-500 bg-red-900/20 text-red-200 text-xs">{errorMsg}</div>}
-                            <Button 
-                                onClick={handleGenerate} 
-                                className="w-full" 
-                                disabled={activePlayers.length < (isBracketMode ? numBracketTeams * 5 : (isCoachMode ? 12 : 10)) || (!isBracketMode && !isRoomReady)}
-                            >
-                                START MATCHMAKING
-                            </Button>
+                            <Button onClick={handleGenerate} className="w-full" disabled={activePlayers.length < (isBracketMode ? numBracketTeams * 5 : (isCoachMode ? 12 : 10)) || (!isBracketMode && !isRoomReady)}>START MATCHMAKING</Button>
                           </div>
                         </div>
                     </div>
                  </div>
               </div>
             )}
-
-            {/* MAIN CONTENT AREA */}
             <div className="w-full">
                  <div className="flex flex-col md:flex-row items-center justify-between mb-6 gap-4">
-                    <button 
-                      onClick={() => setIsSetupOpen(true)} 
-                      className="group relative px-8 py-3 bg-[#0a1a2f] border border-[#dcb06b] clip-corner-sm text-[#dcb06b] font-cinzel font-bold tracking-[0.2em] hover:bg-[#dcb06b] hover:text-[#05090f] transition-all shadow-[0_0_15px_rgba(220,176,107,0.2)]"
-                    >
-                       <span className="flex items-center gap-2">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                          OPEN COMMAND CENTER
-                       </span>
+                    <button onClick={() => setIsSetupOpen(true)} className="group relative px-8 py-3 bg-[#0a1a2f] border border-[#dcb06b] clip-corner-sm text-[#dcb06b] font-cinzel font-bold tracking-[0.2em] hover:bg-[#dcb06b] hover:text-[#05090f] transition-all shadow-[0_0_15px_rgba(220,176,107,0.2)]">
+                       <span className="flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>OPEN COMMAND CENTER</span>
                     </button>
-
                     <h2 className="text-3xl font-cinzel font-black text-[#dcb06b] tracking-widest hidden md:block">SQUAD ROSTER</h2>
-
                     <div className="flex gap-3">
-                      {/* SAVE SQUAD ROSTER */}
-                      <button 
-                        onClick={handleExportRoster}
-                        className="px-6 py-3 border border-[#dcb06b]/30 text-[#dcb06b]/80 hover:text-[#dcb06b] hover:border-[#dcb06b] hover:bg-[#dcb06b]/5 transition-all text-[10px] uppercase font-bold tracking-[0.2em] clip-corner-sm flex items-center justify-center gap-2 group"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>
-                        Save
-                      </button>
-
-                      {/* CLEAR ALL BUTTON */}
-                      <button 
-                        onClick={handleClearAll}
-                        className="px-6 py-3 border border-red-500/30 text-red-500/80 hover:text-red-500 hover:border-red-500 hover:bg-red-500/5 transition-all text-[10px] uppercase font-bold tracking-[0.2em] clip-corner-sm flex items-center justify-center gap-2 group"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                        Clear
-                      </button>
+                      <button onClick={toggleFullscreen} className="px-6 py-3 border border-[#dcb06b]/30 text-[#dcb06b]/80 hover:text-[#dcb06b] hover:border-[#dcb06b] hover:bg-[#dcb06b]/5 transition-all text-[10px] uppercase font-bold tracking-[0.2em] clip-corner-sm flex items-center justify-center gap-2 group"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>Screen</button>
+                      <button onClick={handleExportRoster} className="px-6 py-3 border border-[#dcb06b]/30 text-[#dcb06b]/80 hover:text-[#dcb06b] hover:border-[#dcb06b] hover:bg-[#dcb06b]/5 transition-all text-[10px] uppercase font-bold tracking-[0.2em] clip-corner-sm flex items-center justify-center gap-2 group"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>Save</button>
+                      <button onClick={handleClearAll} className="px-6 py-3 border border-red-500/30 text-red-500/80 hover:text-red-500 hover:border-red-500 hover:bg-red-500/5 transition-all text-[10px] uppercase font-bold tracking-[0.2em] clip-corner-sm flex items-center justify-center gap-2 group"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>Clear</button>
                     </div>
                  </div>
-
                  <div className="tech-border p-6 bg-[#0a1a2f]/40 min-h-[400px]">
                     <PlayerList players={players} onRemove={removePlayer} onToggleActive={togglePlayerActive} onEdit={handleEditPlayer} isSidebarOpen={false} />
                  </div>
@@ -734,16 +690,11 @@ export default function App() {
                  </div>
             </div>
           </main>
-          
           <footer className="py-12 px-6 text-center border-t border-[#dcb06b]/10 bg-[#05090f] mt-auto">
               <div className="max-w-4xl mx-auto flex flex-col items-center gap-4">
                   <div className="w-12 h-0.5 bg-gradient-to-r from-transparent via-[#dcb06b] to-transparent mb-2"></div>
-                  <div className="text-[#dcb06b] font-cinzel font-black text-sm tracking-[0.2em] mb-1">
-                      APPLICATION DEVELOPED BY KAZEHUNT
-                  </div>
-                  <div className="text-[#4a5f78] font-orbitron text-[9px] leading-relaxed tracking-[0.1em] uppercase max-w-2xl flex flex-col gap-2">
-                      <p>DESIGNED EXCLUSIVELY FOR HONOR OF KINGS CUSTOM FUN MATCHES ON THE OFFICIAL DISCORD. THE DEVELOPER ASSUMES NO RESPONSIBILITY FOR USAGE OUTSIDE THIS INTENDED SCOPE.</p>
-                  </div>
+                  <div className="text-[#dcb06b] font-cinzel font-black text-sm tracking-[0.2em] mb-1">APPLICATION DEVELOPED BY KAZEHUNT</div>
+                  <div className="text-[#4a5f78] font-orbitron text-[9px] leading-relaxed tracking-[0.1em] uppercase max-w-2xl flex flex-col gap-2"><p>DESIGNED EXCLUSIVELY FOR HONOR OF KINGS CUSTOM FUN MATCHES ON THE OFFICIAL DISCORD. THE DEVELOPER ASSUMES NO RESPONSIBILITY FOR USAGE OUTSIDE THIS INTENDED SCOPE.</p></div>
               </div>
           </footer>
         </>
@@ -754,7 +705,13 @@ export default function App() {
           match={currentMatch} 
           activePlayers={activePlayers} 
           initialMode={viewMode === 'battle' ? 'battle' : 'draft'}
-          onReset={() => { setCurrentMatch(null); setViewMode('lobby'); }}
+          onReset={() => { 
+              // Abort Logic
+              setCurrentMatch(null); 
+              eraseCookie(STORAGE_KEY_ACTIVE_MATCH);
+              setViewMode('lobby'); 
+          }}
+          onMinimize={handleBackToLobby} // Pass minimize handler
           onCompleteMatch={handleMatchFinish}
           onReroll={handleRerollSlot}
           onStartBattle={() => setViewMode('battle')}
@@ -765,22 +722,19 @@ export default function App() {
       {bracketMatch && viewMode === 'bracket' && (
         <BracketDisplay 
           match={bracketMatch} 
-          onReset={() => { setBracketMatch(null); setViewMode('lobby'); }} 
+          onReset={() => { 
+              setBracketMatch(null); 
+              eraseCookie(STORAGE_KEY_ACTIVE_BRACKET);
+              setViewMode('lobby'); 
+          }} 
+          onMinimize={handleBackToLobby} // Pass minimize handler
           activePlayers={activePlayers}
           onReroll={handleBracketReroll}
           onUpdatePlayer={handleUpdatePlayer}
         />
       )}
 
-      <style>{`
-        @keyframes chromatic {
-          0% { text-shadow: 2px 0 0 #ff0000, -2px 0 0 #0000ff; }
-          25% { text-shadow: -2px 0 0 #ff0000, 2px 0 0 #0000ff; }
-          50% { text-shadow: 2px -1px 0 #ff0000, -2px 1px 0 #0000ff; }
-          75% { text-shadow: -2px 1px 0 #ff0000, 2px -1px 0 #0000ff; }
-          100% { text-shadow: 2px 0 0 #ff0000, -2px 0 0 #0000ff; }
-        }
-      `}</style>
+      <style>{`@keyframes chromatic { 0% { text-shadow: 2px 0 0 #ff0000, -2px 0 0 #0000ff; } 25% { text-shadow: -2px 0 0 #ff0000, 2px 0 0 #0000ff; } 50% { text-shadow: 2px -1px 0 #ff0000, -2px 1px 0 #0000ff; } 75% { text-shadow: -2px 1px 0 #ff0000, 2px -1px 0 #0000ff; } 100% { text-shadow: 2px 0 0 #ff0000, -2px 0 0 #0000ff; } }`}</style>
     </div>
   );
 }
