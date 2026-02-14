@@ -22,7 +22,9 @@ const BRACKET_COLORS = [
   "#06b6d4", // Cyan Dark
   "#d946ef", // Fuchsia
   "#14b8a6", // Teal
-  "#f43f5e"  // Rose
+  "#f43f5e", // Rose
+  "#eab308", // Yellow
+  "#8b5cf6", // Violet
 ];
 
 export const TBD_PLAYER: Player = {
@@ -96,24 +98,40 @@ export const generateMatch = (players: Player[], roomId: string, isCoachMode: bo
   }
 
   const totalSlots = neededRoles.length;
-  let pool = shuffle(players);
-  pool.sort(noisySort);
+  
+  // Optimization: Group players by role upfront
+  const playersByRole: Record<string, Player[]> = {};
+  const allRoles = isCoachMode ? [...ROLES_ORDER, Role.COACH] : ROLES_ORDER;
+  
+  for (const role of allRoles) {
+      let capable = players.filter(p => canPlay(p, role));
+      capable = shuffle(capable);
+      capable.sort((a, b) => getPlayerVersatility(a) - getPlayerVersatility(b));
+      playersByRole[role] = capable;
+  }
 
-  const assignments: Map<number, Player> = new Map();
+  const assignments = new Map<number, Player>();
   const usedPlayerIds = new Set<string>();
+  
+  let operations = 0;
+  const MAX_OPS = 500000;
 
   const solve = (slotIndex: number): boolean => {
+    operations++;
+    if (operations > MAX_OPS) return false;
+
     if (slotIndex >= totalSlots) return true;
     const currentSlot = neededRoles[slotIndex];
-    for (const player of pool) {
+    
+    const candidates = playersByRole[currentSlot.role] || [];
+
+    for (const player of candidates) {
       if (!usedPlayerIds.has(player.id)) {
-        if (canPlay(player, currentSlot.role)) {
           assignments.set(slotIndex, player);
           usedPlayerIds.add(player.id);
           if (solve(slotIndex + 1)) return true;
           assignments.delete(slotIndex);
           usedPlayerIds.delete(player.id);
-        }
       }
     }
     return false;
@@ -134,7 +152,6 @@ export const generateMatch = (players: Player[], roomId: string, isCoachMode: bo
     crimsonTeam.sort(sortTeam);
 
     const randomTeamNames = shuffle(HOK_ITEM_TEAMS);
-    // Use the full name (part after the em-dash) if available
     const azureTeamName = randomTeamNames[0].split(' — ')[1] || randomTeamNames[0];
     const crimsonTeamName = randomTeamNames[1].split(' — ')[1] || randomTeamNames[1];
 
@@ -164,37 +181,6 @@ export const validateBracketPool = (players: Player[], numTeams: number): { vali
       }
   }
 
-  const neededRoles: Role[] = [];
-  ROLES_ORDER.forEach(role => {
-      for(let i=0; i<numTeams; i++) neededRoles.push(role);
-  });
-
-  const roleCounts: Record<string, number> = {};
-  ROLES_ORDER.forEach(r => {
-      roleCounts[r] = players.filter(p => canPlay(p, r)).length;
-  });
-  neededRoles.sort((a, b) => roleCounts[a] - roleCounts[b]);
-
-  const usedIds = new Set<string>();
-
-  const solve = (index: number): boolean => {
-      if (index >= neededRoles.length) return true;
-      const currentRole = neededRoles[index];
-      let candidates = players.filter(p => !usedIds.has(p.id) && canPlay(p, currentRole));
-      candidates.sort((a, b) => getPlayerVersatility(a) - getPlayerVersatility(b));
-
-      for (const player of candidates) {
-          usedIds.add(player.id);
-          if (solve(index + 1)) return true;
-          usedIds.delete(player.id);
-      }
-      return false;
-  };
-
-  if (!solve(0)) {
-      return { valid: false, error: "IMPOSSIBLE COMPOSITION: Unable to assign all roles validly." };
-  }
-
   return { valid: true };
 };
 
@@ -202,55 +188,112 @@ export const generateBracketMatch = (players: Player[], roomId: string, numTeams
   const totalSlots = numTeams * 5;
   if (players.length < totalSlots) return null;
 
-  const slotsToFill: { teamIdx: number, role: Role }[] = [];
+  // 1. Setup Base Slots
+  const baseSlots: { teamIdx: number, role: Role }[] = [];
   for(let i=0; i<numTeams; i++) {
-      ROLES_ORDER.forEach(r => slotsToFill.push({ teamIdx: i, role: r }));
+      ROLES_ORDER.forEach(r => baseSlots.push({ teamIdx: i, role: r }));
   }
 
-  let pool = shuffle(players);
-  pool.sort(noisySort);
+  // 2. Analyze Scarcity to determine strict slot order
+  const roleCounts: Record<string, number> = {};
+  ROLES_ORDER.forEach(r => {
+      roleCounts[r] = players.filter(p => canPlay(p, r)).length;
+  });
 
-  const assignments = new Map<number, Player>();
-  const usedIds = new Set<string>();
+  // 3. Randomized Restart Strategy
+  // Instead of one deep recursion (which freezes the UI on complex 12+ team brackets),
+  // we try multiple times with different random seeds and a lower operation limit per attempt.
+  // This drastically increases the chance of finding a solution in a "good branch" quickly.
+  
+  const MAX_ATTEMPTS = 50; 
+  const OPS_LIMIT_PER_ATTEMPT = 50000;
 
-  const solve = (idx: number): boolean => {
-      if (idx >= slotsToFill.length) return true;
-      const { role } = slotsToFill[idx];
-      let candidates = pool.filter(p => !usedIds.has(p.id) && canPlay(p, role));
-      candidates.sort((a, b) => getPlayerVersatility(a) - getPlayerVersatility(b));
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      
+      // Shuffle players deeply to change candidate order
+      const shuffledPlayers = shuffle([...players]);
 
-      for (const p of candidates) {
-          assignments.set(idx, p);
-          usedIds.add(p.id);
-          if (solve(idx + 1)) return true;
-          usedIds.delete(p.id);
-          assignments.delete(idx);
+      // Pre-calculate candidates for this attempt
+      const playersByRole: Record<string, Player[]> = {};
+      for (const role of ROLES_ORDER) {
+          let capable = shuffledPlayers.filter(p => canPlay(p, role));
+          // Heuristic: Use least versatile players first
+          // Add random noise to handle players with equal versatility differently each attempt
+          capable.sort((a, b) => {
+             const vA = getPlayerVersatility(a);
+             const vB = getPlayerVersatility(b);
+             if (vA === vB) return Math.random() - 0.5;
+             return vA - vB;
+          });
+          playersByRole[role] = capable;
       }
-      return false;
-  };
 
-  if (!solve(0)) return null;
+      // Sort slots: Scarcest roles first (Critical), then random order for same scarcity
+      const slotsToFill = [...baseSlots].sort((a, b) => {
+          const countA = roleCounts[a.role];
+          const countB = roleCounts[b.role];
+          if (countA !== countB) return countA - countB;
+          return Math.random() - 0.5;
+      });
 
-  // Use the full name (part after the em-dash) if available
-  const randomItemNames = shuffle(HOK_ITEM_TEAMS).map(n => n.split(' — ')[1] || n);
-  const teams: BracketTeam[] = [];
-  for (let t = 0; t < numTeams; t++) {
-    const teamSlots: TeamSlot[] = [];
-    ROLES_ORDER.forEach(role => {
-        const rIdx = ROLES_ORDER.indexOf(role);
-        const flatIdx = (t * 5) + rIdx;
-        const player = assignments.get(flatIdx)!;
-        teamSlots.push({ role, player });
-    });
-    
-    // Mix item names with bracket identifiers if list is too short, or just use items
-    const teamName = t < randomItemNames.length ? randomItemNames[t] : `TEAM ${BRACKET_NAMES[t % BRACKET_NAMES.length]}`;
+      const assignments = new Map<number, Player>();
+      const usedIds = new Set<string>();
+      let operations = 0;
 
-    teams.push({
-      name: teamName.toUpperCase(),
-      slots: teamSlots,
-      color: BRACKET_COLORS[t % BRACKET_COLORS.length]
-    });
+      const solve = (idx: number): boolean => {
+          operations++;
+          // Fail fast if this path is taking too long
+          if (operations > OPS_LIMIT_PER_ATTEMPT) return false;
+
+          if (idx >= slotsToFill.length) return true;
+          
+          const { role } = slotsToFill[idx];
+          const candidates = playersByRole[role] || [];
+
+          for (const p of candidates) {
+              if (!usedIds.has(p.id)) {
+                  assignments.set(idx, p);
+                  usedIds.add(p.id);
+                  
+                  if (solve(idx + 1)) return true;
+                  
+                  // Backtrack
+                  usedIds.delete(p.id);
+                  assignments.delete(idx);
+              }
+          }
+          return false;
+      };
+
+      if (solve(0)) {
+          // Success! Build the result
+          const randomItemNames = shuffle(HOK_ITEM_TEAMS).map(n => n.split(' — ')[1] || n);
+          const teams: BracketTeam[] = [];
+          const tempTeams: Record<number, TeamSlot[]> = {};
+          
+          for (let i = 0; i < slotsToFill.length; i++) {
+              const { teamIdx, role } = slotsToFill[i];
+              const player = assignments.get(i)!;
+              if (!tempTeams[teamIdx]) tempTeams[teamIdx] = [];
+              tempTeams[teamIdx].push({ role, player });
+          }
+
+          for (let t = 0; t < numTeams; t++) {
+            const teamSlots = tempTeams[t];
+            // Consistent role order for display
+            teamSlots.sort((a, b) => ROLES_ORDER.indexOf(a.role) - ROLES_ORDER.indexOf(b.role));
+            
+            const teamName = t < randomItemNames.length ? randomItemNames[t] : `TEAM ${BRACKET_NAMES[t % BRACKET_NAMES.length]}`;
+            teams.push({
+              name: teamName.toUpperCase(),
+              slots: teamSlots,
+              color: BRACKET_COLORS[t % BRACKET_COLORS.length]
+            });
+          }
+          return { roomId, teams, timestamp: Date.now() };
+      }
+      // If attempt failed, loop continues to next randomized attempt
   }
-  return { roomId, teams, timestamp: Date.now() };
+
+  return null; // Could not find solution after all attempts
 };

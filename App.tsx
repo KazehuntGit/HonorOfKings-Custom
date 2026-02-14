@@ -307,24 +307,35 @@ export default function App() {
     try {
         await delay(1000);
         setPrepMessage("SCANNING ACTIVE ROSTER...");
-        await delay(1200);
-        setPrepMessage("VALIDATING ROLE COMPATIBILITY...");
         await delay(800);
-
+        
+        // Phase 1: Validation
+        setPrepMessage("VALIDATING ROLE COMPATIBILITY...");
+        await delay(500); // Short delay to let UI show this message
+        
         if (isBracketMode) {
             const validation = validateBracketPool(activePlayers, numBracketTeams);
             if (!validation.valid) throw new Error(validation.error);
+            
+            // Update UI before starting heavy process
+            setPrepMessage("GENERATING TOURNAMENT BRACKET...");
+            await delay(100); // Critical yield to let React render the "GENERATING" message
+
+            // Phase 2: Heavy Generation (Synchronous)
             const result = generateBracketMatch(activePlayers, roomId, numBracketTeams);
+            
             if (result) { 
-                setPrepMessage("GENERATING TOURNAMENT BRACKET...");
-                await delay(800);
+                await delay(800); // Cosmetic delay to show success
                 setBracketMatch(result); 
                 setViewMode('bracket'); 
                 setIsSetupOpen(false);
-            } else { throw new Error("FAILED TO GENERATE BRACKET STRUCTURE."); }
+            } else { 
+                throw new Error("UNABLE TO BALANCE TEAMS. Please check role distribution or add more flexible players."); 
+            }
         } else {
             const required = isCoachMode ? 12 : 10;
             if (activePlayers.length < required) throw new Error(`INSUFFICIENT PLAYERS: Need ${required} active players.`);
+            
             const result = generateMatch(activePlayers, roomId, isCoachMode);
             if (result) { 
                 setPrepMessage("FINALIZING BATTLE DATA...");
@@ -332,7 +343,7 @@ export default function App() {
                 setCurrentMatch(result); 
                 navigate('match', result); 
                 setIsSetupOpen(false);
-            } else { throw new Error("IMPOSSIBLE COMPOSITION."); }
+            } else { throw new Error("IMPOSSIBLE COMPOSITION. Too many constrained roles."); }
         }
         setIsPreparing(false);
     } catch (err: any) {
