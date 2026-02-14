@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { BracketMatchResult, Role, TeamSlot, Player, MatchResult, BracketTeam } from '../types';
 import { RoleIcons, ROLES_ORDER } from '../constants';
 import { Button } from './Button';
@@ -14,7 +14,7 @@ import { getFlexibleCandidate, canPlay, TBD_PLAYER } from '../utils/matchmaker';
 interface BracketDisplayProps {
   match: BracketMatchResult;
   onReset: () => void;
-  onMinimize: () => void; // New Prop
+  onMinimize: () => void;
   activePlayers: Player[];
   onReroll: (teamIndex: number, role: Role, newPlayer: Player) => void;
   onUpdatePlayer: (updatedPlayer: Player) => void;
@@ -28,16 +28,80 @@ interface InternalMatch {
     teamB: any;
 }
 
-type BracketPhase = 'OVERVIEW' | 'REVEAL' | 'TRANSITION' | 'DECLARE_WIN' | 'CELEBRATION' | 'EVALUATION' | 'TOURNAMENT_END';
+type BracketPhase = 'TEAM_REVEAL' | 'MATCHUP_LOTTERY' | 'OVERVIEW' | 'TRANSITION' | 'DECLARE_WIN' | 'CELEBRATION' | 'EVALUATION' | 'TOURNAMENT_END';
+
+const ScrambleText: React.FC<{ text: string; isRevealed: boolean; className?: string }> = ({ text, isRevealed, className }) => {
+  const [display, setDisplay] = useState(isRevealed ? text : 'INITIALIZING...');
+  
+  useEffect(() => {
+    if (!isRevealed) {
+        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#@&";
+        const interval = setInterval(() => {
+            setDisplay(Array(text.length > 0 ? text.length : 8).fill(0).map(() => chars[Math.floor(Math.random() * chars.length)]).join(''));
+        }, 50);
+        return () => clearInterval(interval);
+    } else {
+        let iteration = 0;
+        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        const interval = setInterval(() => {
+            setDisplay(text.split("").map((letter, index) => {
+                if (index < iteration) return letter;
+                return chars[Math.floor(Math.random() * chars.length)];
+            }).join(""));
+            if (iteration >= text.length) clearInterval(interval);
+            iteration += 1/2; 
+        }, 30);
+        return () => clearInterval(interval);
+    }
+  }, [text, isRevealed]);
+
+  return <span className={className}>{display}</span>;
+};
+
+// Component for the rolling team name in Lottery Phase
+const RollingTeamName: React.FC<{ targetName: string; isLocked: boolean; color: string }> = ({ targetName, isLocked, color }) => {
+    const [currentName, setCurrentName] = useState("SEARCHING...");
+    
+    useEffect(() => {
+        if (isLocked) {
+            setCurrentName(targetName);
+            return;
+        }
+        
+        // Random names/words to cycle through
+        const pool = ["ALPHA", "OMEGA", "DELTA", "SEARCHING", "TARGETING", "LOCKED", "PENDING", "SYSTEM", "KINGS", "HONOR"];
+        const interval = setInterval(() => {
+            setCurrentName(pool[Math.floor(Math.random() * pool.length)]);
+        }, 80);
+        
+        return () => clearInterval(interval);
+    }, [isLocked, targetName]);
+
+    return (
+        <div className={`transition-all duration-300 ${isLocked ? 'scale-100 opacity-100' : 'scale-95 opacity-50 blur-[1px]'}`}>
+            <h4 className="font-cinzel font-black text-lg md:text-2xl uppercase tracking-widest break-words leading-tight" style={{ color: isLocked ? color : '#4a5f78' }}>
+                {currentName}
+            </h4>
+        </div>
+    );
+};
 
 export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, onMinimize, activePlayers, onReroll, onUpdatePlayer }) => {
-  const [phase, setPhase] = useState<BracketPhase>('OVERVIEW');
+  const [phase, setPhase] = useState<BracketPhase>('TEAM_REVEAL');
   const [currentMatchIdx, setCurrentMatchIdx] = useState(0);
   const [matchRoomIds, setMatchRoomIds] = useState<Record<number, string>>({});
   const [scores, setScores] = useState<Record<string, number>>({});
   const [matchEvaluations, setMatchEvaluations] = useState<Record<string, { mvpId?: string, ratings?: Record<string, number> }>>({});
   const [currentRoundWinner, setCurrentRoundWinner] = useState<'azure' | 'crimson' | null>(null);
   const [tournamentChampion, setTournamentChampion] = useState<any | null>(null);
+
+  // Team Reveal State
+  const [revealedTeamIndices, setRevealedTeamIndices] = useState<Set<number>>(new Set());
+  const [isGlobalRolling, setIsGlobalRolling] = useState(false);
+  const [isGlobalRevealComplete, setIsGlobalRevealComplete] = useState(false);
+
+  // Matchup Lottery State
+  const [lotteryRevealedCount, setLotteryRevealedCount] = useState(0);
 
   const [globalAssignments, setGlobalAssignments] = useState<Record<string, string>>(() => {
       const initial: Record<string, string> = {};
@@ -66,19 +130,15 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
   }, [match]);
 
   const [showAbortConfirm, setShowAbortConfirm] = useState(false);
-
   const [renameState, setRenameState] = useState<{ isOpen: boolean; player: Player | null; newName: string }>({
     isOpen: false,
     player: null,
     newName: ''
   });
 
-  const [completedReveals, setCompletedReveals] = useState<Set<number>>(new Set());
-  const [revealedSlots, setRevealedSlots] = useState<Set<string>>(new Set());
-  const [currentRoleIdx, setCurrentRoleIdx] = useState(-1);
   const [wheelState, setWheelState] = useState<{
     isOpen: boolean;
-    type: 'reveal' | 'reroll';
+    type: 'reroll';
     team: 'azure' | 'crimson';
     role: Role;
     winnerName: string;
@@ -96,7 +156,7 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
       return TBD_PLAYER;
   }, [globalAssignments, activePlayers]);
 
-  const { quarterMatches, semiMatches, grandFinalMatch, allMatches, hasQuarterFinals } = useMemo(() => {
+  const { roundOneMatches, quarterMatches, semiMatches, grandFinalMatch, allMatches, hasRoundOne } = useMemo(() => {
       const getTeamObj = (teamIndex: number) => {
           if (teamIndex < 0 || teamIndex >= match.teams.length) return null;
           const original = match.teams[teamIndex];
@@ -130,12 +190,80 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
 
       const numTeams = match.teams.length;
 
+      // Logika khusus 12 Tim
+      if (numTeams === 12) {
+          const r1: InternalMatch[] = [];
+          for (let i = 0; i < 4; i++) {
+              r1.push({ id: i, label: `PLAY-IN ${i + 1}`, mode: 'BO1', teamA: getTeamObj(i * 2), teamB: getTeamObj(i * 2 + 1) });
+          }
+          const qm: InternalMatch[] = [];
+          qm.push({ id: 4, label: 'QUARTER 1', mode: 'BO1', teamA: getWinnerTeam(0, r1[0].teamA, r1[0].teamB), teamB: getTeamObj(8) });
+          qm.push({ id: 5, label: 'QUARTER 2', mode: 'BO1', teamA: getWinnerTeam(1, r1[1].teamA, r1[1].teamB), teamB: getTeamObj(9) });
+          qm.push({ id: 6, label: 'QUARTER 3', mode: 'BO1', teamA: getWinnerTeam(2, r1[2].teamA, r1[2].teamB), teamB: getTeamObj(10) });
+          qm.push({ id: 7, label: 'QUARTER 4', mode: 'BO1', teamA: getWinnerTeam(3, r1[3].teamA, r1[3].teamB), teamB: getTeamObj(11) });
+          
+          const sm: InternalMatch[] = [];
+          sm.push({ id: 8, label: 'SEMI FINAL 1', mode: 'BO1', teamA: getWinnerTeam(4, qm[0].teamA, qm[0].teamB), teamB: getWinnerTeam(5, qm[1].teamA, qm[1].teamB) });
+          sm.push({ id: 9, label: 'SEMI FINAL 2', mode: 'BO1', teamA: getWinnerTeam(6, qm[2].teamA, qm[2].teamB), teamB: getWinnerTeam(7, qm[3].teamA, qm[3].teamB) });
+          
+          const gf: InternalMatch = { id: 10, label: 'GRAND FINAL', mode: 'BO3', teamA: getWinnerTeam(8, sm[0].teamA, sm[0].teamB), teamB: getWinnerTeam(9, sm[1].teamA, sm[1].teamB) };
+          
+          return { roundOneMatches: r1, quarterMatches: qm, semiMatches: sm, grandFinalMatch: gf, allMatches: [...r1, ...qm, ...sm, gf], hasRoundOne: true };
+      }
+
+      // Logika khusus 14 Tim
+      if (numTeams === 14) {
+          const r1: InternalMatch[] = [];
+          // 6 matches for first 12 teams (0-11)
+          for (let i = 0; i < 6; i++) {
+              r1.push({ id: i, label: `PLAY-IN ${i + 1}`, mode: 'BO1', teamA: getTeamObj(i * 2), teamB: getTeamObj(i * 2 + 1) });
+          }
+
+          const qm: InternalMatch[] = [];
+          // QF1: W(M0) vs W(M1)
+          qm.push({ id: 6, label: 'QUARTER 1', mode: 'BO1', teamA: getWinnerTeam(0, r1[0].teamA, r1[0].teamB), teamB: getWinnerTeam(1, r1[1].teamA, r1[1].teamB) });
+          // QF2: W(M2) vs W(M3)
+          qm.push({ id: 7, label: 'QUARTER 2', mode: 'BO1', teamA: getWinnerTeam(2, r1[2].teamA, r1[2].teamB), teamB: getWinnerTeam(3, r1[3].teamA, r1[3].teamB) });
+          // QF3: W(M4) vs T12 (Bye)
+          qm.push({ id: 8, label: 'QUARTER 3', mode: 'BO1', teamA: getWinnerTeam(4, r1[4].teamA, r1[4].teamB), teamB: getTeamObj(12) });
+          // QF4: W(M5) vs T13 (Bye)
+          qm.push({ id: 9, label: 'QUARTER 4', mode: 'BO1', teamA: getWinnerTeam(5, r1[5].teamA, r1[5].teamB), teamB: getTeamObj(13) });
+
+          const sm: InternalMatch[] = [];
+          sm.push({ id: 10, label: 'SEMI FINAL 1', mode: 'BO1', teamA: getWinnerTeam(6, qm[0].teamA, qm[0].teamB), teamB: getWinnerTeam(7, qm[1].teamA, qm[1].teamB) });
+          sm.push({ id: 11, label: 'SEMI FINAL 2', mode: 'BO1', teamA: getWinnerTeam(8, qm[2].teamA, qm[2].teamB), teamB: getWinnerTeam(9, qm[3].teamA, qm[3].teamB) });
+
+          const gf: InternalMatch = { id: 12, label: 'GRAND FINAL', mode: 'BO3', teamA: getWinnerTeam(10, sm[0].teamA, sm[0].teamB), teamB: getWinnerTeam(11, sm[1].teamA, sm[1].teamB) };
+          
+          return { roundOneMatches: r1, quarterMatches: qm, semiMatches: sm, grandFinalMatch: gf, allMatches: [...r1, ...qm, ...sm, gf], hasRoundOne: true };
+      }
+
+      // Logika khusus 16 Tim
+      if (numTeams === 16) {
+          const r16: InternalMatch[] = [];
+          for (let i = 0; i < 8; i++) {
+              r16.push({ id: i, label: `R16 - MATCH ${i + 1}`, mode: 'BO1', teamA: getTeamObj(i * 2), teamB: getTeamObj(i * 2 + 1) });
+          }
+          const qm: InternalMatch[] = [];
+          for (let i = 0; i < 4; i++) {
+              qm.push({ id: 8+i, label: `QUARTER ${i + 1}`, mode: 'BO1', teamA: getWinnerTeam(i*2, r16[i*2].teamA, r16[i*2].teamB), teamB: getWinnerTeam(i*2+1, r16[i*2+1].teamA, r16[i*2+1].teamB) });
+          }
+          const sm: InternalMatch[] = [];
+          for (let i = 0; i < 2; i++) {
+              sm.push({ id: 12+i, label: `SEMI FINAL ${i + 1}`, mode: 'BO1', teamA: getWinnerTeam(8+i*2, qm[i*2].teamA, qm[i*2].teamB), teamB: getWinnerTeam(8+i*2+1, qm[i*2+1].teamA, qm[i*2+1].teamB) });
+          }
+          const gf: InternalMatch = { id: 14, label: 'GRAND FINAL', mode: 'BO3', teamA: getWinnerTeam(12, sm[0].teamA, sm[0].teamB), teamB: getWinnerTeam(13, sm[1].teamA, sm[1].teamB) };
+          
+          return { roundOneMatches: r16, quarterMatches: qm, semiMatches: sm, grandFinalMatch: gf, allMatches: [...r16, ...qm, ...sm, gf], hasRoundOne: true };
+      }
+
+      // Existing logics for 3, 4, 5, 6, 8 teams...
       if (numTeams === 3) {
         const m0: InternalMatch = { id: 0, label: 'ELIMINATION', mode: 'BO1', teamA: getTeamObj(0), teamB: getTeamObj(1) };
         const m1: InternalMatch = { id: 1, label: 'CHALLENGER', mode: 'BO1', teamA: getLoserTeam(0, m0.teamA, m0.teamB), teamB: getTeamObj(2) };
         const m2: InternalMatch = { id: 2, label: 'GRAND FINAL', mode: 'BO3', teamA: getWinnerTeam(0, m0.teamA, m0.teamB), teamB: getWinnerTeam(1, m1.teamA, m1.teamB) };
         const matches: InternalMatch[] = [m0, m1, m2];
-        return { quarterMatches: [], semiMatches: [m0, m1], grandFinalMatch: m2, allMatches: matches, hasQuarterFinals: false };
+        return { roundOneMatches: [], quarterMatches: [], semiMatches: [m0, m1], grandFinalMatch: m2, allMatches: matches, hasRoundOne: false };
       }
 
       if (numTeams === 5 || numTeams === 6) {
@@ -145,11 +273,9 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
         const s1: InternalMatch = { id: 3, label: 'SEMI FINAL 1', mode: 'BO1', teamA: getWinnerTeam(0, q0.teamA, q0.teamB), teamB: getWinnerTeam(1, q1.teamA, q1.teamB) };
         const s2: InternalMatch = { id: 4, label: 'SEMI FINAL 2', mode: 'BO1', teamA: getWinnerTeam(2, q2.teamA, q2.teamB), teamB: getLoserTeam(3, s1.teamA, s1.teamB) };
         const gf: InternalMatch = { id: 5, label: 'GRAND FINAL', mode: 'BO3', teamA: getWinnerTeam(3, s1.teamA, s1.teamB), teamB: getWinnerTeam(4, s2.teamA, s2.teamB) };
-        const matches: InternalMatch[] = [q0, q1, q2, s1, s2, gf];
-        return { quarterMatches: [q0, q1, q2], semiMatches: [s1, s2], grandFinalMatch: gf, allMatches: matches, hasQuarterFinals: true };
+        return { roundOneMatches: [], quarterMatches: [q0, q1, q2], semiMatches: [s1, s2], grandFinalMatch: gf, allMatches: [q0, q1, q2, s1, s2, gf], hasRoundOne: false };
       }
 
-      const hasQuarterFinals = numTeams === 8;
       const qMatches: InternalMatch[] = [];
       if (numTeams === 8) {
           for (let i = 0; i < 4; i++) {
@@ -167,74 +293,41 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
       }
       const gfIndex = numTeams === 8 ? 6 : 2;
       const gf: InternalMatch = { id: gfIndex, label: 'GRAND FINAL', mode: 'BO3', teamA: getWinnerTeam(sMatches[0].id, sMatches[0].teamA, sMatches[0].teamB), teamB: getWinnerTeam(sMatches[1].id, sMatches[1].teamA, sMatches[1].teamB) };
-      const all: InternalMatch[] = [...qMatches, ...sMatches, gf];
-      return { quarterMatches: qMatches, semiMatches: sMatches, grandFinalMatch: gf, allMatches: all, hasQuarterFinals };
+      return { roundOneMatches: [], quarterMatches: qMatches, semiMatches: sMatches, grandFinalMatch: gf, allMatches: [...qMatches, ...sMatches, gf], hasRoundOne: false };
   }, [match, scores, globalAssignments, getAssignedPlayer]); 
 
-  const handleSkipAll = (forceMatchIdx = currentMatchIdx, background = false) => {
-    const matchData = allMatches.find(m => m.id === forceMatchIdx);
-    if (!matchData) return;
-    
-    const newAssignments: Record<string, string> = {};
-    const usedIds = new Set(Object.values(globalAssignments));
-    
-    const fillTeam = (teamName: string) => {
-        const teamIdx = match.teams.findIndex(t => t.name === teamName);
-        if (teamIdx === -1) return;
-        ROLES_ORDER.forEach(role => {
-            const key = `${teamIdx}-${role}`;
-            if (globalAssignments[key]) return; 
-            const available = activePlayers.filter(p => !usedIds.has(p.id));
-            const picked = getFlexibleCandidate(available, role);
-            if (picked) {
-                newAssignments[key] = picked.id;
-                usedIds.add(picked.id);
-            }
-        });
-    };
+  // LOTTERY LOGIC
+  useEffect(() => {
+      if (phase === 'MATCHUP_LOTTERY') {
+          // Determine which set of matches is the "First Round" based on team size
+          const matchesToReveal = hasRoundOne ? roundOneMatches : quarterMatches;
+          
+          if (lotteryRevealedCount <= matchesToReveal.length) {
+              const timer = setTimeout(() => {
+                  setLotteryRevealedCount(prev => prev + 1);
+                  // Play a small sound if possible, or trigger haptic
+              }, 1200); // 1.2s per matchup reveal
+              return () => clearTimeout(timer);
+          }
+      }
+  }, [phase, lotteryRevealedCount, hasRoundOne, roundOneMatches, quarterMatches]);
 
-    if (matchData.teamA) fillTeam(matchData.teamA.name);
-    if (matchData.teamB) fillTeam(matchData.teamB.name);
-    
-    setGlobalAssignments(prev => ({ ...prev, ...newAssignments }));
-
-    if (!background) {
-        const allCards = new Set<string>();
-        ROLES_ORDER.forEach(r => { 
-            allCards.add(`m${forceMatchIdx}-A-${r}`); 
-            if (matchData.teamB) allCards.add(`m${forceMatchIdx}-B-${r}`); 
-        });
-        setRevealedSlots(allCards);
-        setCurrentRoleIdx(ROLES_ORDER.length - 1);
-        setCompletedReveals(prev => new Set(prev).add(forceMatchIdx));
+  const activeMatchData = useMemo(() => {
+    const data = allMatches.find(m => m.id === currentMatchIdx);
+    if (!data) return undefined;
+    if (data.label === 'GRAND FINAL') {
+        const sA = scores[`${currentMatchIdx}-A`] || 0;
+        const sB = scores[`${currentMatchIdx}-B`] || 0;
+        if ((sA + sB) % 2 !== 0) return { ...data, teamA: data.teamB, teamB: data.teamA };
     }
-  };
+    return data;
+  }, [allMatches, currentMatchIdx, scores]);
+
+  const activeRoomId = matchRoomIds[currentMatchIdx] || 'AUTO';
 
   const startMatchFlow = (idx: number) => {
     setCurrentMatchIdx(idx);
-    const m = allMatches.find(m => m.id === idx);
-    const numTeams = match.teams.length;
-    let shouldEnableRolling = false;
-
-    if (numTeams === 3 || numTeams === 4) {
-        if (idx === 0 || idx === 1) shouldEnableRolling = true;
-    } else {
-        shouldEnableRolling = quarterMatches.some(q => q.id === idx);
-    }
-
-    if (idx === grandFinalMatch.id) {
-        setPhase('TRANSITION');
-        return;
-    }
-
-    if (!shouldEnableRolling || completedReveals.has(idx)) {
-         handleSkipAll(idx, false);
-         setPhase('REVEAL');
-    } else {
-        setRevealedSlots(new Set());
-        setCurrentRoleIdx(-1);
-        setPhase('REVEAL');
-    }
+    setPhase('TRANSITION');
   };
 
   const handleEvaluationComplete = (mvpId?: string, ratings?: Record<string, number>) => {
@@ -242,36 +335,103 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
      const scoreKeyB = `${currentMatchIdx}-B`;
      const currentScoreA = scores[scoreKeyA] || 0;
      const currentScoreB = scores[scoreKeyB] || 0;
-
      let isSwapped = false;
      if (currentMatchIdx === grandFinalMatch.id) {
          const gamesPlayed = currentScoreA + currentScoreB;
          if (gamesPlayed % 2 !== 0) isSwapped = true;
      }
-
-     let incrementA = 0;
-     let incrementB = 0;
-
-     if (currentRoundWinner === 'azure') {
-         if (isSwapped) incrementB = 1;
-         else incrementA = 1;
-     } else if (currentRoundWinner === 'crimson') {
-         if (isSwapped) incrementA = 1;
-         else incrementB = 1;
-     }
-
+     let incrementA = 0; let incrementB = 0;
+     if (currentRoundWinner === 'azure') { if (isSwapped) incrementB = 1; else incrementA = 1; } 
+     else if (currentRoundWinner === 'crimson') { if (isSwapped) incrementA = 1; else incrementB = 1; }
      let newScoreA = currentScoreA + incrementA;
      let newScoreB = currentScoreB + incrementB;
-
      setScores(prev => ({ ...prev, [scoreKeyA]: newScoreA, [scoreKeyB]: newScoreB }));
      setMatchEvaluations(prev => ({ ...prev, [`${currentMatchIdx}-${newScoreA + newScoreB}`]: { mvpId, ratings } }));
-
      if (currentMatchIdx === grandFinalMatch.id) {
          if (newScoreA >= 2 || newScoreB >= 2) {
              setTournamentChampion(newScoreA >= 2 ? grandFinalMatch.teamA : grandFinalMatch.teamB);
              setPhase('TOURNAMENT_END');
          } else setPhase('TRANSITION');
      } else setPhase('OVERVIEW');
+  };
+
+  const submitRename = () => {
+    if (renameState.player && renameState.newName.trim()) {
+        onUpdatePlayer({ ...renameState.player, name: renameState.newName.trim() });
+        setRenameState({ isOpen: false, player: null, newName: '' });
+    }
+  };
+
+  const handleWheelComplete = () => {
+    if (!wheelState) return;
+    if (wheelState.type === 'reroll' && wheelState.winnerPlayer && activeMatchData) {
+        const side = wheelState.team;
+        const teamData = side === 'azure' ? activeMatchData.teamA : activeMatchData.teamB;
+        const teamIdx = match.teams.findIndex(t => t.name === teamData?.name);
+        if (teamIdx !== -1) {
+            setGlobalAssignments(prev => ({ ...prev, [`${teamIdx}-${wheelState.role}`]: wheelState.winnerPlayer!.id }));
+            onReroll(teamIdx, wheelState.role, wheelState.winnerPlayer!);
+        }
+    }
+    setWheelState(null);
+  };
+
+  const handleStartGlobalReveal = () => {
+     setIsGlobalRolling(true);
+     match.teams.forEach((_, idx) => {
+         setTimeout(() => {
+             setRevealedTeamIndices(prev => new Set(prev).add(idx));
+             if (idx === match.teams.length - 1) {
+                 setTimeout(() => {
+                     setIsGlobalRolling(false);
+                     setIsGlobalRevealComplete(true);
+                 }, 1500);
+             }
+         }, (idx + 1) * 2000); // Stagger reveal
+     });
+  };
+
+  const renderPlayerCard = (role: Role, side: 'azure' | 'crimson') => {
+    if (!activeMatchData) return null;
+    const teamData = side === 'azure' ? activeMatchData.teamA : activeMatchData.teamB;
+    const teamIdx = match.teams.findIndex(t => t.name === teamData?.name);
+    const player = teamData ? teamData.slots.find(s => s.role === role)?.player : null;
+    const isCoach = role === Role.COACH;
+
+    let theme = isCoach ? { bg: 'bg-[#1a1a1a]', border: 'border-white', glow: 'shadow-[0_0_20px_rgba(255,255,255,0.6)]', text: 'text-white', gradient: 'from-white/20 to-transparent' }
+      : side === 'azure' ? { bg: 'bg-[#0a1a2f]', border: 'border-[#00d2ff]', glow: 'shadow-[0_0_15px_#00d2ff]', text: 'text-[#00d2ff]', gradient: 'from-[#00d2ff]/20 to-transparent' }
+      : { bg: 'bg-[#1a0505]', border: 'border-[#ef4444]', glow: 'shadow-[0_0_15px_#ef4444]', text: 'text-[#ef4444]', gradient: 'from-[#c02d2d]/20 to-transparent' };
+
+    return (
+      <div className={`relative h-16 w-full animate-slide-in perspective-container group`}>
+        <div className={`absolute inset-0 clip-corner-md border-l-4 tilt-card ${theme.bg} ${theme.border} ${theme.glow} shadow-[0_0_20px_rgba(0,0,0,0.6)] transition-all duration-300`}>
+           <div className={`flex flex-col h-full relative z-10 px-6 py-0 justify-center ${side === 'crimson' ? 'items-end text-right' : 'items-start text-left'}`}>
+             <div className={`mb-1 px-2 py-0.5 rounded-sm bg-black/50 border border-white/10 ${theme.text} scale-[0.8] origin-${side === 'crimson' ? 'right' : 'left'} opacity-90`}>
+                {RoleIcons[role]}
+             </div>
+             <span className="block text-xl md:text-3xl font-bold text-white truncate font-orbitron drop-shadow-md w-full">
+                {player?.name}
+             </span>
+             <div className={`absolute inset-0 bg-gradient-to-r ${theme.gradient} opacity-50 pointer-events-none`}></div>
+           </div>
+           
+           <div className={`absolute top-2 z-50 flex gap-2 transition-all opacity-0 group-hover:opacity-100 ${side === 'azure' ? 'right-4' : 'left-4'}`}>
+              <button onClick={(e) => { 
+                  e.stopPropagation(); 
+                  if (teamIdx !== -1) {
+                      const usedIds = new Set(Object.values(globalAssignments));
+                      const candidates = activePlayers.filter(p => !usedIds.has(p.id) && canPlay(p, role));
+                      if (candidates.length > 0) {
+                          const newPlayer = candidates[Math.floor(Math.random() * candidates.length)];
+                          setWheelState({ isOpen: true, type: 'reroll', team: side, role, winnerName: newPlayer.name, winnerPlayer: newPlayer, candidates: candidates.map(p => p.name), duration: 4000 });
+                      }
+                  }
+              }} className="p-2.5 bg-black/60 hover:bg-[#dcb06b] rounded-full text-white hover:text-black transition-all" title="Reroll Player"><svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg></button>
+              <button onClick={(e) => { e.stopPropagation(); if(player) setRenameState({ isOpen: true, player, newName: player.name }); }} className="p-2.5 bg-black/60 hover:bg-[#00d2ff] rounded-full text-white hover:text-black transition-all" title="Change Nickname"><svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg></button>
+           </div>
+        </div>
+      </div>
+    );
   };
 
   const EnergyConnector = ({ type, height, style }: { type: 'fork' | 'straight', height: number, style?: React.CSSProperties }) => (
@@ -314,7 +474,7 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
                 <div className={`flex items-center gap-3 relative transition-all duration-300 ${sA > sB || (isBye && !isDone) ? 'opacity-100 scale-100' : (isDone ? 'opacity-40 grayscale scale-95' : 'opacity-100')}`}>
                     <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: m.teamA?.color }}></div>
                     <div className={`flex-1 flex justify-between items-center ml-3 p-2 border-b ${sA > sB ? 'border-[#dcb06b]/50 bg-[#dcb06b]/5' : 'border-[#1e3a5f]/50'}`}>
-                        <span className={`text-xs font-cinzel font-black tracking-widest truncate ${sA > sB ? 'text-[#dcb06b]' : 'text-white'}`}>{m.teamA?.name || 'TBD'}</span>
+                        <span className={`text-xs font-cinzel font-black tracking-widest break-words leading-none whitespace-normal line-clamp-2 ${sA > sB ? 'text-[#dcb06b]' : 'text-white'}`}>{m.teamA?.name || 'TBD'}</span>
                         <span className={`font-orbitron font-bold text-lg ${sA > sB ? 'text-[#dcb06b]' : 'text-[#4a5f78]'}`}>{sA}</span>
                     </div>
                 </div>
@@ -324,7 +484,7 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
                     <div className={`flex items-center gap-3 relative transition-all duration-300 ${sB > sA ? 'opacity-100 scale-100' : (isDone ? 'opacity-40 grayscale scale-95' : 'opacity-100')}`}>
                         <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: m.teamB?.color }}></div>
                         <div className={`flex-1 flex justify-between items-center ml-3 p-2 border-b ${sB > sA ? 'border-[#dcb06b]/50 bg-[#dcb06b]/5' : 'border-[#1e3a5f]/50'}`}>
-                            <span className={`text-xs font-cinzel font-black tracking-widest truncate ${sB > sA ? 'text-[#dcb06b]' : 'text-white'}`}>{m.teamB?.name || 'TBD'}</span>
+                            <span className={`text-xs font-cinzel font-black tracking-widest break-words leading-none whitespace-normal line-clamp-2 ${sB > sA ? 'text-[#dcb06b]' : 'text-white'}`}>{m.teamB?.name || 'TBD'}</span>
                             <span className={`font-orbitron font-bold text-lg ${sB > sA ? 'text-[#dcb06b]' : 'text-[#4a5f78]'}`}>{sB}</span>
                         </div>
                     </div>
@@ -350,318 +510,375 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
       );
   };
 
-  const activeMatchData = useMemo(() => {
-    const data = allMatches.find(m => m.id === currentMatchIdx);
-    if (!data) return undefined;
-    if (data.label === 'GRAND FINAL') {
-        const sA = scores[`${currentMatchIdx}-A`] || 0;
-        const sB = scores[`${currentMatchIdx}-B`] || 0;
-        const gamesPlayed = sA + sB;
-        if (gamesPlayed % 2 !== 0) {
-            return { ...data, teamA: data.teamB, teamB: data.teamA };
-        }
-    }
-    return data;
-  }, [allMatches, currentMatchIdx, scores]);
+  const renderMatchupLottery = () => {
+      const matchesToDisplay = hasRoundOne ? roundOneMatches : quarterMatches;
+      const isComplete = lotteryRevealedCount > matchesToDisplay.length;
 
-  const activeRoomId = matchRoomIds[currentMatchIdx] || 'AUTO';
+      return (
+          <div className="min-h-screen bg-[#05090f] p-8 relative overflow-y-auto flex flex-col items-center">
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,#1e3a5f_0%,#05090f_80%)] opacity-30 pointer-events-none"></div>
+              
+              <div className="relative z-10 text-center mb-12 animate-slide-in">
+                  <h1 className="text-4xl md:text-6xl font-cinzel font-black text-[#dcb06b] tracking-[0.3em] uppercase drop-shadow-[0_0_20px_rgba(220,176,107,0.5)]">
+                      RANDOMIZING MATCHUPS
+                  </h1>
+                  <div className="h-1 w-48 bg-[#dcb06b] mx-auto mt-4 mb-2 animate-pulse"></div>
+                  <p className="text-[#8a9db8] font-orbitron tracking-widest text-xs">CALCULATING BRACKET SEEDS...</p>
+              </div>
 
-  const handleNextReveal = () => {
-    if (!activeMatchData) return;
-    const targetRoleIdx = currentRoleIdx + 1;
-    if (targetRoleIdx >= ROLES_ORDER.length) return; 
+              <div className="w-full max-w-6xl grid grid-cols-1 md:grid-cols-2 gap-8 mb-48">
+                  {matchesToDisplay.map((m, idx) => {
+                      const isRevealed = idx < lotteryRevealedCount;
+                      const isRolling = idx === lotteryRevealedCount;
+                      
+                      // For UX, we only show matchups that actually have two teams
+                      if (!m.teamA || !m.teamB) return null;
 
-    const role = ROLES_ORDER[targetRoleIdx];
-    const azureId = `m${currentMatchIdx}-A-${role}`;
-    const side: 'azure' | 'crimson' = !revealedSlots.has(azureId) ? 'azure' : 'crimson';
+                      return (
+                          <div key={m.id} className={`
+                              relative bg-[#0a1a2f]/80 border-2 clip-corner-md p-6 flex flex-col items-center justify-center gap-4 transition-all duration-500
+                              ${isRevealed ? 'border-[#dcb06b] shadow-[0_0_20px_rgba(220,176,107,0.2)] opacity-100 scale-100' : 
+                                isRolling ? 'border-[#00d2ff] shadow-[0_0_30px_rgba(0,210,255,0.4)] opacity-100 scale-105 z-10' : 
+                                'border-[#1e3a5f] opacity-40 scale-95'}
+                          `}>
+                              <div className="absolute top-2 left-4 text-[10px] font-orbitron font-black text-[#4a5f78]">{m.label}</div>
+                              
+                              <div className="flex w-full items-center justify-between gap-4">
+                                  {/* Team A */}
+                                  <div className="flex-1 text-center">
+                                      <div className="h-1 w-full bg-gradient-to-r from-transparent to-[#00d2ff] mb-2 opacity-50"></div>
+                                      <RollingTeamName targetName={m.teamA.name} isLocked={isRevealed} color="#00d2ff" />
+                                  </div>
 
-    const teamData = side === 'azure' ? activeMatchData.teamA : activeMatchData.teamB;
-    const originalTeamIndex = match.teams.findIndex(t => t.name === teamData?.name);
-    
-    if (originalTeamIndex === -1) return;
+                                  {/* VS */}
+                                  <div className="font-black font-orbitron text-2xl italic text-white/20">VS</div>
 
-    let winner = getAssignedPlayer(originalTeamIndex, role);
-    
-    if (winner.id === 'tbd') {
-        const currentlyAssignedIds = new Set(Object.values(globalAssignments));
-        const availablePlayers = activePlayers.filter(p => !currentlyAssignedIds.has(p.id));
-        const pickedPlayer = getFlexibleCandidate(availablePlayers, role);
-        if (pickedPlayer) {
-            winner = pickedPlayer;
-            const key = `${originalTeamIndex}-${role}`;
-            setGlobalAssignments(prev => ({ ...prev, [key]: pickedPlayer.id }));
-        }
-    }
-    
-    const knownTakenIds = new Set<string>();
-    completedReveals.forEach(mIdx => {
-        const mData = allMatches.find(m => m.id === mIdx);
-        if(mData) {
-            [mData.teamA, mData.teamB].forEach(team => {
-                if(team) {
-                    const tIdx = match.teams.findIndex(t => t.name === team.name);
-                    if(tIdx !== -1) {
-                        ROLES_ORDER.forEach(r => {
-                            const pid = globalAssignments[`${tIdx}-${r}`];
-                            if(pid) knownTakenIds.add(pid);
-                        });
-                    }
+                                  {/* Team B */}
+                                  <div className="flex-1 text-center">
+                                      <div className="h-1 w-full bg-gradient-to-l from-transparent to-[#ef4444] mb-2 opacity-50"></div>
+                                      <RollingTeamName targetName={m.teamB.name} isLocked={isRevealed} color="#ef4444" />
+                                  </div>
+                              </div>
+                              
+                              {!isRevealed && isRolling && (
+                                  <div className="absolute inset-0 bg-white/5 animate-pulse pointer-events-none"></div>
+                              )}
+                          </div>
+                      );
+                  })}
+              </div>
+
+              {isComplete && (
+                  <div className="fixed bottom-10 left-0 right-0 flex justify-center z-50 animate-slide-in">
+                      <Button onClick={() => setPhase('OVERVIEW')} className="px-24 py-6 text-xl tracking-[0.2em] shadow-[0_0_40px_rgba(220,176,107,0.5)]">
+                          VIEW BRACKET TREE
+                      </Button>
+                  </div>
+              )}
+          </div>
+      );
+  };
+
+  const renderTeamRevealScreen = () => {
+     return (
+        <div className="fixed inset-0 z-[150] bg-[#05090f] overflow-y-auto custom-scrollbar flex flex-col items-center">
+            {/* Background FX - Replicating Lobby Feel */}
+            <div className="absolute inset-0 bg-[url('https://raw.githubusercontent.com/yoshiharuyamashita/css-fog-animation/master/img/fog1.png')] bg-repeat-x bg-cover opacity-10 animate-fog pointer-events-none"></div>
+            <div className="absolute inset-0 bg-[url('https://raw.githubusercontent.com/yoshiharuyamashita/css-fog-animation/master/img/fog2.png')] bg-repeat-x bg-cover opacity-10 animate-fog pointer-events-none" style={{ animationDirection: 'reverse', animationDuration: '30s' }}></div>
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,#000000_100%)] pointer-events-none"></div>
+            
+            <div className="relative z-10 w-full max-w-[1600px] p-4 md:p-8 lg:p-12 flex flex-col items-center min-h-screen">
+                
+                {/* Header Section */}
+                <div className="text-center mb-12 relative animate-slide-in">
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-[#dcb06b] blur-[120px] opacity-10 pointer-events-none"></div>
+                    <h1 className="text-4xl md:text-6xl lg:text-7xl font-cinzel font-black text-transparent bg-clip-text bg-gradient-to-b from-[#f3dcb1] via-[#dcb06b] to-[#8a6d3b] tracking-[0.15em] drop-shadow-[0_0_30px_rgba(220,176,107,0.4)] mb-4">
+                        OFFICIAL DRAFT
+                    </h1>
+                    <div className="flex items-center justify-center gap-6">
+                         <div className="h-[1px] w-12 md:w-24 bg-gradient-to-r from-transparent to-[#dcb06b]"></div>
+                         <p className="text-[#8a9db8] font-orbitron tracking-[0.4em] text-[10px] md:text-xs font-bold uppercase">TOURNAMENT ROSTER REVEAL</p>
+                         <div className="h-[1px] w-12 md:w-24 bg-gradient-to-l from-transparent to-[#dcb06b]"></div>
+                    </div>
+                </div>
+
+                {/* Team Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 w-full mb-96">
+                    {match.teams.map((team, idx) => {
+                        const isRevealed = revealedTeamIndices.has(idx);
+                        
+                        return (
+                            <div 
+                                key={idx} 
+                                className={`
+                                    relative group transition-all duration-700
+                                    ${isRevealed ? 'opacity-100 translate-y-0' : 'opacity-70 translate-y-4'}
+                                `}
+                            >
+                                {/* Glow backing for revealed cards */}
+                                {isRevealed && <div className="absolute -inset-1 bg-[#dcb06b] blur-lg opacity-20 group-hover:opacity-30 transition-opacity duration-500"></div>}
+
+                                <div className={`
+                                    relative bg-[#0a1a2f]/80 backdrop-blur-xl border 
+                                    ${isRevealed ? 'border-[#dcb06b] shadow-[0_0_30px_rgba(220,176,107,0.15)]' : 'border-[#1e3a5f]'} 
+                                    clip-corner-md p-1 h-full flex flex-col transition-colors duration-500
+                                `}>
+                                    {/* Scanning Line Animation if rolling */}
+                                    {isGlobalRolling && !isRevealed && (
+                                        <div className="absolute inset-0 z-20 overflow-hidden clip-corner-md pointer-events-none">
+                                            <div className="w-full h-[2px] bg-[#00d2ff] shadow-[0_0_15px_#00d2ff] absolute top-0 animate-[scan_1.5s_linear_infinite]"></div>
+                                            <div className="absolute inset-0 bg-gradient-to-b from-[#00d2ff]/10 to-transparent animate-[scan-gradient_1.5s_linear_infinite]"></div>
+                                        </div>
+                                    )}
+
+                                    {/* Card Header */}
+                                    <div className="bg-[#05090f]/80 p-4 border-b border-white/5 relative overflow-hidden group-hover:bg-[#05090f]/90 transition-colors">
+                                        <div className="absolute top-0 right-0 p-2 opacity-10">
+                                            <span className="text-[50px] font-black font-orbitron text-white leading-none tracking-tighter">{String(idx + 1).padStart(2, '0')}</span>
+                                        </div>
+                                        <div className="relative z-10 flex flex-col gap-1">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-1.5 h-8 shadow-[0_0_10px_currentColor]" style={{ backgroundColor: team.color, color: team.color }}></div>
+                                                <h3 className="font-cinzel font-black text-white tracking-widest text-lg break-words leading-tight drop-shadow-md">{team.name}</h3>
+                                            </div>
+                                            <div className={`text-[9px] font-orbitron font-bold tracking-wider uppercase pl-5 flex items-center gap-2 ${isRevealed ? 'text-[#dcb06b]' : 'text-[#4a5f78]'}`}>
+                                                <div className={`w-1.5 h-1.5 rounded-full ${isRevealed ? 'bg-[#dcb06b] animate-pulse' : 'bg-[#4a5f78]'}`}></div>
+                                                {isRevealed ? 'ROSTER CONFIRMED' : 'AWAITING DECRYPTION...'}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Card Body (Roles) */}
+                                    <div className="p-4 space-y-3 flex-1 bg-gradient-to-b from-[#0a1a2f]/40 to-[#05090f]/60">
+                                        {ROLES_ORDER.map((role, rIdx) => {
+                                            const player = getAssignedPlayer(idx, role);
+                                            return (
+                                                <div key={role} className="flex items-center gap-3 relative group/row">
+                                                    {/* Change Nickname Button (Was Role Icon) */}
+                                                    <button 
+                                                        onClick={(e) => { 
+                                                            e.stopPropagation(); 
+                                                            if(player && player.id !== 'tbd') setRenameState({ isOpen: true, player, newName: player.name }); 
+                                                        }}
+                                                        disabled={!isRevealed || !player || player.id === 'tbd'}
+                                                        className={`
+                                                            w-8 h-8 flex items-center justify-center rounded bg-[#05090f] border transition-all duration-300
+                                                            ${isRevealed 
+                                                                ? 'border-[#dcb06b]/40 text-[#dcb06b] shadow-[0_0_10px_rgba(220,176,107,0.2)] hover:bg-[#dcb06b] hover:text-[#05090f] cursor-pointer' 
+                                                                : 'border-[#1e3a5f] text-[#4a5f78] cursor-default'}
+                                                        `}
+                                                        title="Edit Nickname"
+                                                    >
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                                        </svg>
+                                                    </button>
+
+                                                    {/* Player Name & Full Role Name */}
+                                                    <div className="flex-1 min-w-0 flex flex-col justify-center h-full">
+                                                        <span className="text-[7px] text-[#4a5f78] uppercase font-bold tracking-wider leading-none mb-0.5">
+                                                            {role.toUpperCase()}
+                                                        </span>
+                                                        <div className={`
+                                                            text-sm font-orbitron font-bold truncate transition-colors duration-300
+                                                            ${isRevealed ? 'text-white drop-shadow-sm' : 'text-[#1e3a5f]'}
+                                                        `}>
+                                                            <ScrambleText text={player?.name || '???'} isRevealed={isRevealed} />
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Tech Decor */}
+                                                    {isRevealed && (
+                                                        <div className="opacity-0 group-hover/row:opacity-100 transition-opacity">
+                                                            <div className="w-1 h-1 bg-[#dcb06b] rounded-full shadow-[0_0_5px_#dcb06b]"></div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* Card Footer */}
+                                    <div className="h-1 w-full flex">
+                                        <div className={`h-full flex-1 transition-all duration-1000 ${isRevealed ? 'bg-[#dcb06b] shadow-[0_0_10px_#dcb06b]' : 'bg-[#1e3a5f]'}`}></div>
+                                        <div className="h-full w-4 bg-[#05090f]"></div>
+                                        <div className={`h-full w-8 transition-all duration-1000 ${isRevealed ? 'bg-[#dcb06b]' : 'bg-[#1e3a5f]'}`}></div>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {/* Footer Controls */}
+                <div className="fixed bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-[#05090f] via-[#05090f]/95 to-transparent z-50 flex flex-col items-center pointer-events-none">
+                    <div className="pointer-events-auto flex flex-col items-center gap-4">
+                        {!isGlobalRevealComplete ? (
+                            <button 
+                                onClick={handleStartGlobalReveal} 
+                                disabled={isGlobalRolling}
+                                className={`
+                                    group relative px-20 py-5 bg-[#0a1a2f] border border-[#dcb06b] clip-corner-md 
+                                    text-[#dcb06b] font-cinzel font-black text-xl tracking-[0.2em] 
+                                    hover:bg-[#dcb06b] hover:text-[#05090f] transition-all duration-300
+                                    ${isGlobalRolling ? 'opacity-50 cursor-not-allowed' : 'shadow-[0_0_30px_rgba(220,176,107,0.3)] hover:shadow-[0_0_50px_rgba(220,176,107,0.6)] animate-pulse'}
+                                `}
+                            >
+                                <div className="absolute inset-0 bg-[#dcb06b] opacity-0 group-hover:opacity-10 transition-opacity"></div>
+                                <span className="relative z-10 flex items-center gap-4">
+                                    {isGlobalRolling ? (
+                                        <>
+                                            <svg className="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                            DECRYPTING...
+                                        </>
+                                    ) : (
+                                        <>COMMENCE REVEAL</>
+                                    )}
+                                </span>
+                            </button>
+                        ) : (
+                            <button 
+                                onClick={() => setPhase('MATCHUP_LOTTERY')} 
+                                className="group relative px-24 py-6 bg-[#dcb06b] text-[#05090f] clip-corner-md font-cinzel font-black text-2xl tracking-[0.2em] hover:bg-white hover:scale-105 transition-all shadow-[0_0_50px_rgba(220,176,107,0.6)]"
+                            >
+                                START BRACKET
+                            </button>
+                        )}
+
+                        {!isGlobalRolling && !isGlobalRevealComplete && (
+                            <button onClick={() => setPhase('MATCHUP_LOTTERY')} className="text-[#4a5f78] hover:text-[#dcb06b] text-[10px] font-orbitron font-bold uppercase tracking-widest border-b border-transparent hover:border-[#dcb06b] transition-all">
+                                Skip Animation &gt;&gt;
+                            </button>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            <style>{`
+                @keyframes scan {
+                    0% { top: 0%; opacity: 0; }
+                    10% { opacity: 1; }
+                    90% { opacity: 1; }
+                    100% { top: 100%; opacity: 0; }
                 }
-            });
-        }
-    });
-
-    revealedSlots.forEach(slotKey => {
-         const parts = slotKey.match(/^m(\d+)-([AB])-(.+)$/);
-         if (parts) {
-             const mIdx = parseInt(parts[1]);
-             if (mIdx === currentMatchIdx) {
-                 const sideCode = parts[2];
-                 const r = parts[3]; 
-                 const mData = activeMatchData; 
-                 if (mData) {
-                     const team = sideCode === 'A' ? mData.teamA : mData.teamB;
-                     if(team) {
-                         const tIdx = match.teams.findIndex(t => t.name === team.name);
-                         if(tIdx !== -1) {
-                             const pid = globalAssignments[`${tIdx}-${r}`];
-                             if(pid) knownTakenIds.add(pid);
-                         }
-                     }
-                 }
-             }
-         }
-    });
-
-    const candidates = activePlayers.filter(p => {
-        if (knownTakenIds.has(p.id)) return false;
-        return canPlay(p, role);
-    });
-
-    const candidateNames = candidates.map(p => p.name);
-    if (!candidateNames.includes(winner.name)) candidateNames.push(winner.name);
-    
-    const randomDuration = Math.floor(Math.random() * (9000 - 4500 + 1)) + 4500;
-    
-    setWheelState({ 
-        isOpen: true, 
-        type: 'reveal', 
-        team: side, 
-        role: role, 
-        winnerName: winner.name, 
-        winnerPlayer: winner, 
-        candidates: candidateNames, 
-        duration: randomDuration 
-    });
-  };
-
-  const handleRerollClick = (side: 'azure' | 'crimson', role: Role) => {
-    const teamData = side === 'azure' ? activeMatchData?.teamA : activeMatchData?.teamB;
-    if (!teamData) return;
-    const teamIndex = match.teams.findIndex(t => t.name === teamData.name);
-    if (teamIndex === -1) return;
-
-    const currentlyAssignedIds = new Set(Object.values(globalAssignments));
-    const benchPlayers = activePlayers.filter(p => !currentlyAssignedIds.has(p.id));
-    
-    if (benchPlayers.length === 0) return;
-    
-    const candidates = benchPlayers.filter(p => canPlay(p, role));
-    if (candidates.length === 0) return;
-    
-    const newPlayer = candidates[Math.floor(Math.random() * candidates.length)];
-    const randomDuration = Math.floor(Math.random() * (8000 - 4000 + 1)) + 4000;
-    
-    setWheelState({ 
-        isOpen: true, 
-        type: 'reroll', 
-        team: side, 
-        role: role, 
-        winnerName: newPlayer.name, 
-        winnerPlayer: newPlayer, 
-        candidates: candidates.map(p => p.name), 
-        duration: randomDuration 
-    });
-  };
-
-  const handleWheelComplete = () => {
-    if (!wheelState) return;
-    if (wheelState.type === 'reveal') {
-        const { team, role, winnerPlayer } = wheelState;
-        if (winnerPlayer && activeMatchData) {
-             const teamData = team === 'azure' ? activeMatchData.teamA : activeMatchData.teamB;
-             const teamIdx = match.teams.findIndex(t => t.name === teamData?.name);
-             if (teamIdx !== -1) {
-                 const key = `${teamIdx}-${role}`;
-                 setGlobalAssignments(prev => ({ ...prev, [key]: winnerPlayer.id }));
-             }
-        }
-        const id = `m${currentMatchIdx}-${team === 'azure' ? 'A' : 'B'}-${role}`;
-        setRevealedSlots(prev => new Set(prev).add(id));
-        
-        if (team === 'crimson') {
-            const nextIdx = currentRoleIdx + 1;
-            setCurrentRoleIdx(nextIdx);
-            if (nextIdx >= ROLES_ORDER.length) {
-                setCompletedReveals(prev => new Set(prev).add(currentMatchIdx));
-            }
-        }
-    } else if (wheelState.type === 'reroll' && wheelState.winnerPlayer) {
-        const teamData = wheelState.team === 'azure' ? activeMatchData?.teamA : activeMatchData?.teamB;
-        if (teamData) {
-            const idx = match.teams.findIndex(t => t.name === teamData.name);
-            if (idx !== -1) {
-                const key = `${idx}-${wheelState.role}`;
-                setGlobalAssignments(prev => ({ ...prev, [key]: wheelState.winnerPlayer!.id }));
-            }
-        }
-    }
-    setWheelState(null);
-  };
-
-  const openRenameModal = (player: Player) => {
-    setRenameState({ isOpen: true, player, newName: player.name });
-  };
-  
-  const submitRename = () => {
-    if (renameState.player && renameState.newName.trim()) {
-        onUpdatePlayer({ ...renameState.player, name: renameState.newName.trim() });
-        setRenameState({ isOpen: false, player: null, newName: '' });
-    }
-  };
-
-  const renderPlayerCard = (role: Role, teamSide: 'azure' | 'crimson') => {
-    const teamData = teamSide === 'azure' ? activeMatchData?.teamA : activeMatchData?.teamB;
-    const teamIdx = match.teams.findIndex(t => t.name === teamData?.name);
-    const player = teamIdx !== -1 ? getAssignedPlayer(teamIdx, role) : TBD_PLAYER;
-
-    const id = `m${currentMatchIdx}-${teamSide === 'azure' ? 'A' : 'B'}-${role}`;
-    if (!revealedSlots.has(id)) return <div className="h-16 w-full relative overflow-hidden clip-corner-md border border-[#1e3a5f] bg-[#05090f]/80 flex flex-col items-center justify-center opacity-40 group"><div className="text-[#1e3a5f] group-hover:text-[#dcb06b]/50 transition-colors duration-500 transform scale-100 opacity-50">{RoleIcons[role]}</div></div>;
-    
-    const theme = teamSide === 'azure' ? { bg: 'bg-[#0a1a2f]', border: 'border-[#00d2ff]', glow: 'shadow-[0_0_15px_#00d2ff]', text: 'text-[#00d2ff]', gradient: 'from-[#00d2ff]/20 to-transparent' } : { bg: 'bg-[#1a0505]', border: 'border-[#ef4444]', glow: 'shadow-[0_0_15px_#ef4444]', text: 'text-[#ef4444]', gradient: 'from-[#ef4444]/20 to-transparent' };
-    
-    return (
-        <div className="relative h-16 w-full animate-slide-in perspective-container group">
-            <div className={`absolute inset-0 clip-corner-md border-l-4 tilt-card ${theme.bg} ${theme.border} ${theme.glow} shadow-[0_0_20px_rgba(0,0,0,0.6)] transition-all duration-300`}>
-                <div className={`flex flex-col h-full relative z-10 px-6 py-0 justify-center ${teamSide === 'crimson' ? 'items-end text-right' : 'items-start text-left'}`}>
-                    <div className={`mb-1 px-2 py-0.5 rounded-sm bg-black/50 border border-white/10 ${theme.text} scale-[0.8] origin-${teamSide === 'crimson' ? 'right' : 'left'} opacity-90`}>{RoleIcons[role]}</div>
-                    <span className="block text-xl md:text-3xl font-bold text-white truncate font-orbitron drop-shadow-md w-full">{player.name}</span>
-                    <div className={`absolute inset-0 bg-gradient-to-r ${theme.gradient} opacity-50 pointer-events-none`}></div>
-                </div>
-                <div className={`absolute top-2 z-50 flex gap-2 transition-all opacity-0 group-hover:opacity-100 ${teamSide === 'azure' ? 'right-4' : 'left-4'}`}>
-                   <button onClick={(e) => { e.stopPropagation(); handleRerollClick(teamSide, role); }} className="p-2.5 bg-black/60 hover:bg-[#dcb06b] rounded-full text-white hover:text-black transition-all" title="Reroll Player"><svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg></button>
-                   <button onClick={(e) => { e.stopPropagation(); if(player) openRenameModal(player); }} className="p-2.5 bg-black/60 hover:bg-[#00d2ff] rounded-full text-white hover:text-black transition-all" title="Change Nickname"><svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg></button>
-                </div>
-            </div>
+                @keyframes scan-gradient {
+                    0% { top: -100%; }
+                    100% { top: 100%; }
+                }
+            `}</style>
         </div>
-    );
+     );
   };
 
-  const renderTournamentEnd = () => {
-    return (
+  if (phase === 'TOURNAMENT_END') return (
       <div className="fixed inset-0 z-[300] flex flex-col items-center justify-center bg-[#05090f] overflow-hidden">
-        <iframe width="0" height="0" src="https://www.youtube.com/embed/13ARO0HDZsQ?autoplay=1&loop=1&playlist=13ARO0HDZsQ" frameBorder="0" allow="autoplay" className="hidden pointer-events-none"></iframe>
         <div className="god-rays opacity-40"></div>
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,#05090f_90%)] z-10"></div>
-        {Array.from({ length: 40 }).map((_, i) => (<div key={i} className="confetti-piece" style={{ left: `${Math.random() * 100}%`, animationDelay: `${Math.random() * 5}s`, backgroundColor: Math.random() > 0.5 ? '#dcb06b' : '#ffffff', zIndex: 20 }}></div>))}
         <div className="relative z-20 flex flex-col items-center animate-trophy-pop w-full max-w-4xl">
-            <h3 className="text-[#dcb06b] font-orbitron font-black tracking-[0.8em] text-sm uppercase mb-4 animate-pulse opacity-80">TOURNAMENT CONCLUDED</h3>
-            <h1 className="text-5xl md:text-8xl font-cinzel font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-[#dcb06b] mb-12 tracking-[0.2em] drop-shadow-[0_10px_30px_rgba(220,176,107,0.4)] text-center px-4">TOURNAMENT CHAMPIONS</h1>
-            <div className="bg-[#0a1a2f]/80 border-4 border-[#dcb06b] px-12 md:px-24 py-10 clip-corner-md shadow-[0_0_100px_rgba(220,176,107,0.3)] relative overflow-hidden group mb-12 transform hover:scale-105 transition-transform duration-500">
-                <div className="absolute inset-0 bg-gradient-to-br from-[#dcb06b]/10 to-transparent opacity-50"></div>
-                <h2 className="text-6xl md:text-9xl font-black font-cinzel text-white text-center drop-shadow-[0_0_20px_#dcb06b]" style={{ color: tournamentChampion?.color || '#fff' }}>{tournamentChampion?.name}</h2>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 w-full px-6 mb-16">
-               {tournamentChampion?.slots.map((slot: TeamSlot, idx: number) => (<div key={idx} className="flex flex-col items-center p-4 bg-black/40 border border-[#dcb06b]/40 clip-corner-sm backdrop-blur-md transform transition-all duration-700 hover:border-[#dcb06b] hover:bg-[#dcb06b]/5 animate-slide-in" style={{ animationDelay: `${idx * 150}ms` }}><div className="text-[#dcb06b] mb-2 opacity-70 scale-90">{RoleIcons[slot.role]}</div><span className="text-white font-orbitron font-black text-sm md:text-base tracking-widest truncate max-w-full">{slot.player.name}</span></div>))}
-            </div>
+            <h1 className="text-5xl md:text-8xl font-cinzel font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-[#dcb06b] mb-12 tracking-[0.2em] text-center px-4">TOURNAMENT CHAMPIONS</h1>
+            <h2 className="text-6xl md:text-9xl font-black font-cinzel text-white text-center drop-shadow-[0_0_20px_#dcb06b] mb-12" style={{ color: tournamentChampion?.color }}>{tournamentChampion?.name}</h2>
             <Button onClick={onReset} size="lg" className="px-24 h-20 text-xl shadow-[0_0_50px_rgba(220,176,107,0.5)]">RETURN TO LOBBY</Button>
         </div>
       </div>
-    );
-  };
+  );
 
-  if (phase === 'TOURNAMENT_END') return renderTournamentEnd();
-
-  // Overlay Return Button for Full Screen Phases
   const overlayBackButton = (
       <div className="fixed top-6 left-6 z-[300]">
-            <Button variant="outline" size="sm" onClick={onMinimize} className="bg-black/80 border-[#dcb06b] text-[#dcb06b] hover:bg-[#dcb06b] hover:text-black">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
-                LOBBY
-            </Button>
+            <Button variant="outline" size="sm" onClick={onMinimize} className="bg-black/80 border-[#dcb06b] text-[#dcb06b] hover:bg-[#dcb06b] hover:text-black">LOBBY</Button>
       </div>
   );
 
-  if (phase === 'TRANSITION' && activeMatchData) return <>{overlayBackButton}<PortalTransition azureTeam={activeMatchData.teamA?.slots || []} crimsonTeam={activeMatchData.teamB?.slots || []} onComplete={() => setPhase('DECLARE_WIN')} /></>;
-  if (phase === 'DECLARE_WIN' && activeMatchData) return <>{overlayBackButton}<MatchSummary match={{ roomId: activeRoomId, azureTeam: activeMatchData.teamA?.slots || [], crimsonTeam: activeMatchData.teamB?.slots || [], isCoachMode: false, timestamp: Date.now() }} onReset={(w) => { if(!w) setPhase('OVERVIEW'); else { setCurrentRoundWinner(w); setPhase('CELEBRATION'); } }} /></>;
-  if (phase === 'CELEBRATION' && currentRoundWinner && activeMatchData) return <VictoryCelebration winner={currentRoundWinner} teamSlots={(currentRoundWinner === 'azure' ? activeMatchData.teamA?.slots : activeMatchData.teamB?.slots) || []} onDismiss={() => setPhase('EVALUATION')} />;
-  if (phase === 'EVALUATION' && currentRoundWinner && activeMatchData) return <>{overlayBackButton}<EvaluationScreen match={{ roomId: activeRoomId, azureTeam: activeMatchData.teamA?.slots || [], crimsonTeam: activeMatchData.teamB?.slots || [], isCoachMode: false, timestamp: Date.now() }} winner={currentRoundWinner} onComplete={handleEvaluationComplete} /></>;
+  if (phase === 'TEAM_REVEAL') return renderTeamRevealScreen();
+  if (phase === 'MATCHUP_LOTTERY') return renderMatchupLottery();
+  if (phase === 'TRANSITION' && activeMatchData) return <>{overlayBackButton}<PortalTransition azureTeam={activeMatchData.teamA?.slots || []} crimsonTeam={activeMatchData.teamB?.slots || []} azureTeamName={activeMatchData.teamA?.name || 'TBD'} crimsonTeamName={activeMatchData.teamB?.name || 'TBD'} onComplete={() => setPhase('DECLARE_WIN')} /></>;
+  if (phase === 'DECLARE_WIN' && activeMatchData) return <>{overlayBackButton}<MatchSummary match={{ roomId: activeRoomId, azureTeam: activeMatchData.teamA?.slots || [], crimsonTeam: activeMatchData.teamB?.slots || [], isCoachMode: false, timestamp: Date.now(), azureTeamName: activeMatchData.teamA?.name, crimsonTeamName: activeMatchData.teamB?.name }} onReset={(w) => { if(!w) setPhase('OVERVIEW'); else { setCurrentRoundWinner(w); setPhase('CELEBRATION'); } }} /></>;
+  if (phase === 'CELEBRATION' && currentRoundWinner && activeMatchData) return <VictoryCelebration winner={currentRoundWinner} teamSlots={(currentRoundWinner === 'azure' ? activeMatchData.teamA?.slots : activeMatchData.teamB?.slots) || []} azureTeamName={activeMatchData.teamA?.name} crimsonTeamName={activeMatchData.teamB?.name} onDismiss={() => setPhase('EVALUATION')} />;
+  if (phase === 'EVALUATION' && currentRoundWinner && activeMatchData) return <>{overlayBackButton}<EvaluationScreen match={{ roomId: activeRoomId, azureTeam: activeMatchData.teamA?.slots || [], crimsonTeam: activeMatchData.teamB?.slots || [], isCoachMode: false, timestamp: Date.now(), azureTeamName: activeMatchData.teamA?.name, crimsonTeamName: activeMatchData.teamB?.name }} winner={currentRoundWinner} onComplete={handleEvaluationComplete} /></>;
 
-  const getRevealButtonText = () => {
-     if (revealedSlots.size >= 10) return "INITIALIZE BATTLE";
-     const nextRoleIdx = currentRoleIdx + 1;
-     if (nextRoleIdx >= ROLES_ORDER.length) return "INITIALIZE BATTLE";
-     const nextRole = ROLES_ORDER[nextRoleIdx];
-     const azureRevealed = revealedSlots.has(`m${currentMatchIdx}-A-${nextRole}`);
-     return azureRevealed ? `SELECT CRIMSON ${nextRole.replace(' Lane', '').toUpperCase()}` : `SELECT AZURE ${nextRole.replace(' Lane', '').toUpperCase()}`;
-  };
+  // Use a variable to handle depth spacing, similar to how 16 teams was handled
+  const isDeepBracket = match.teams.length >= 14;
 
   return (
     <div className="fixed inset-0 z-[100] bg-[#05090f] overflow-x-auto overflow-y-auto font-inter">
-      <ConfirmModal isOpen={showAbortConfirm} title="ABORT TOURNAMENT" message="Are you sure you want to end the tournament? All progress will be lost." onConfirm={onReset} onCancel={() => setShowAbortConfirm(false)} isDestructive={true} />
-      {renameState.isOpen && (<div className="fixed inset-0 z-[1000] flex items-center justify-center p-4"><div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setRenameState({ isOpen: false, player: null, newName: '' })}></div><div className="relative w-full max-w-sm bg-[#0a1a2f] border border-[#dcb06b] clip-corner-md shadow-[0_0_30px_rgba(220,176,107,0.3)] animate-slide-in p-6"><h3 className="text-[#dcb06b] font-cinzel font-bold text-lg mb-4 text-center tracking-widest">CHANGE NICKNAME</h3><input type="text" value={renameState.newName} onChange={e => setRenameState({ ...renameState, newName: e.target.value })} className="w-full bg-black/50 border border-[#1e3a5f] p-3 text-white font-orbitron focus:border-[#dcb06b] outline-none mb-6 text-center" autoFocus /><div className="flex gap-3"><Button variant="secondary" onClick={() => setRenameState({ isOpen: false, player: null, newName: '' })} className="flex-1">CANCEL</Button><Button onClick={submitRename} className="flex-1">CONFIRM</Button></div></div></div>)}
-
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,#0a1a2f_0%,#05090f_60%)] pointer-events-none"></div>
+      
+      {/* Rename Modal UI */}
+      {renameState.isOpen && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setRenameState({ isOpen: false, player: null, newName: '' })}></div>
+          <div className="relative w-full max-w-sm bg-[#0a1a2f] border border-[#dcb06b] clip-corner-md shadow-[0_0_30px_rgba(220,176,107,0.3)] animate-slide-in p-6">
+            <h3 className="text-[#dcb06b] font-cinzel font-bold text-lg mb-4 text-center tracking-widest">CHANGE NICKNAME</h3>
+            <input type="text" value={renameState.newName} onChange={e => setRenameState({ ...renameState, newName: e.target.value })} className="w-full bg-black/50 border border-[#1e3a5f] p-3 text-white font-orbitron focus:border-[#dcb06b] outline-none mb-6 text-center" autoFocus />
+            <div className="flex gap-3">
+              <Button variant="secondary" onClick={() => setRenameState({ isOpen: false, player: null, newName: '' })} className="flex-1">CANCEL</Button>
+              <Button onClick={submitRename} className="flex-1">CONFIRM</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {phase === 'OVERVIEW' ? (
         <div className="relative z-10 w-full min-h-screen p-8 md:p-12 flex flex-col items-center min-w-max">
-            {/* Top Bar for Overview */}
-            <div className="absolute top-8 left-8">
-               <Button variant="outline" size="sm" onClick={onMinimize} className="bg-black/80 border-[#dcb06b] text-[#dcb06b] hover:bg-[#dcb06b] hover:text-black">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
-                  LOBBY
-               </Button>
+          <div className="absolute top-8 left-8"><Button variant="outline" size="sm" onClick={onMinimize}>LOBBY</Button></div>
+          <h1 className="text-4xl md:text-6xl font-cinzel font-black text-[#dcb06b] tracking-[0.3em] mb-16 uppercase">TOURNAMENT BRACKET</h1>
+          <div className={`flex items-center justify-center relative py-20 ${isDeepBracket ? 'gap-20 md:gap-28' : 'gap-16 md:gap-24'}`}>
+            {hasRoundOne && (
+                <div className={`flex flex-col relative ${isDeepBracket ? 'gap-8' : 'gap-8'}`}>
+                    {roundOneMatches.map((m, i) => (
+                        <div key={m.id} className="relative">
+                            {renderBracketMatchCard(m)}
+                            {match.teams.length === 14 ? (
+                                // 14 Teams Special Connectors: First 4 matches are pairs (Fork), last 2 are singles (Straight)
+                                <>
+                                    {i < 4 && i % 2 === 0 && <EnergyConnector type="fork" height={218} style={{top:'50%'}}/>}
+                                    {i >= 4 && <EnergyConnector type="straight" height={218} style={{top:'50%'}}/>}
+                                </>
+                            ) : (
+                                i % 2 === 0 && <EnergyConnector type="fork" height={218} style={{top:'50%'}}/>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
+            <div className={`flex flex-col relative ${isDeepBracket ? 'gap-[274px]' : 'gap-32'}`}>
+                {quarterMatches.map((m, i) => (
+                    <div key={m.id} className="relative">
+                        {renderBracketMatchCard(m)}
+                        {i % 2 === 0 && <EnergyConnector type="fork" height={isDeepBracket ? 458 : 338} style={{top:'50%'}}/>}
+                    </div>
+                ))}
             </div>
-
-          <div className="text-center mb-16"><h1 className="text-4xl md:text-6xl font-cinzel font-black text-[#dcb06b] tracking-[0.3em] mb-4 uppercase">TOURNAMENT BRACKET</h1><p className="text-[10px] text-[#4a5f78] font-orbitron font-black tracking-[0.5em] uppercase border-y border-[#4a5f78]/30 py-2 inline-block">BATTLE FOR GLORY</p></div>
-          <div className="flex gap-24 md:gap-40 items-center justify-center relative py-20">
-            {hasQuarterFinals && (<div className="flex flex-col gap-16 relative">{quarterMatches.map((m, i) => (<div key={m.id} className="relative">{renderBracketMatchCard(m)}{match.teams.length === 5 || match.teams.length === 6 ? (i < 2 ? (i === 0 && <EnergyConnector type="fork" height={274} />) : <EnergyConnector type="straight" height={0} />) : (i % 2 === 0 && <EnergyConnector type="fork" height={322} />)}</div>))}</div>)}
-            <div className={`flex flex-col gap-32 relative`}>{semiMatches.map((m, i) => (<div key={m.id} className="relative">{renderBracketMatchCard(m)}{i === 0 && <EnergyConnector type="fork" height={338} />}</div>))}</div>
-            <div className={`relative scale-125 ml-10`}>{renderBracketMatchCard(grandFinalMatch)}</div>
+            <div className={`flex flex-col relative ${isDeepBracket ? 'gap-[758px]' : 'gap-64'}`}>
+                {semiMatches.map((m, i) => (
+                    <div key={m.id} className="relative">
+                        {renderBracketMatchCard(m)}
+                        {i === 0 && <EnergyConnector type="fork" height={isDeepBracket ? 938 : 458} style={{top:'50%'}}/>}
+                    </div>
+                ))}
+            </div>
+            <div className="relative scale-125 ml-10">{renderBracketMatchCard(grandFinalMatch)}</div>
           </div>
-          <button onClick={() => setShowAbortConfirm(true)} className="mt-24 px-12 py-3 bg-red-900/10 border border-red-900/40 text-red-500 font-cinzel font-bold tracking-[0.3em] uppercase hover:bg-red-900 hover:text-white transition-all clip-corner-sm">ABORT TOURNAMENT</button>
+          <button onClick={() => setShowAbortConfirm(true)} className="mt-24 px-12 py-3 bg-red-900/10 border border-red-900/40 text-red-500 font-cinzel font-bold tracking-[0.3em] uppercase">ABORT TOURNAMENT</button>
         </div>
       ) : (
         <div className="w-full max-w-7xl mx-auto px-6 py-6 pb-28 relative h-screen flex flex-col justify-center overflow-hidden">
-            {wheelState && wheelState.isOpen && <SpinWheel candidates={wheelState.candidates} winnerName={wheelState.winnerName} team={wheelState.team} roleName={wheelState.role} roomId={activeRoomId} duration={wheelState.duration} onComplete={handleWheelComplete} onCancel={() => setWheelState(null)} />}
-            
-            <div className="absolute top-8 left-8 right-8 z-50 flex justify-between items-center">
-                 <div className="flex gap-3">
-                   <Button variant="outline" size="sm" onClick={onMinimize} className="bg-black/80 border-[#dcb06b] text-[#dcb06b] hover:bg-[#dcb06b] hover:text-black">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
-                      LOBBY
-                   </Button>
-                   <Button variant="outline" size="sm" onClick={() => setPhase('OVERVIEW')} className="border-[#dcb06b]/60 text-[#dcb06b] hover:bg-[#dcb06b]/10 text-xs px-6">
-                      BACK TO BRACKET
-                   </Button>
-                </div>
-                
-                <div className="flex flex-col items-center gap-0 scale-[0.85] origin-top"><span className="text-[#dcb06b] font-orbitron text-[10px] tracking-[0.4em] font-black uppercase mb-1 opacity-70">ROOM ID</span><div className="relative"><div className="absolute -inset-2 bg-[#dcb06b] blur-[15px] opacity-20 pointer-events-none"></div><div className="relative bg-black/90 border border-[#dcb06b]/50 px-8 py-2 clip-corner-sm flex flex-col items-center shadow-[0_0_20px_rgba(220,176,107,0.3)]"><span className="text-2xl font-orbitron font-black text-white tracking-[0.4em] drop-shadow-[0_0_10px_#dcb06b]">{activeRoomId}</span></div></div></div>{revealedSlots.size < 10 ? <Button variant="outline" size="sm" onClick={() => handleSkipAll(currentMatchIdx)} className="border-[#dcb06b]/60 text-[#dcb06b] hover:bg-[#dcb06b]/10 text-xs px-6">SKIP ALL</Button> : <div className="w-[120px]"></div>}</div>
-            <div className="relative max-w-7xl mx-auto w-full flex-1 flex flex-col justify-center px-10">
-                <div className="grid grid-cols-2 gap-12 md:gap-32 items-end mb-6"><div className="text-left"><h2 className="text-2xl md:text-5xl font-cinzel font-black text-transparent bg-clip-text bg-gradient-to-b from-cyan-100 to-cyan-600 tracking-widest drop-shadow-[0_0_15px_rgba(6,182,212,0.4)]" style={{ color: activeMatchData?.teamA?.color }}>{activeMatchData?.teamA?.name.split(' ')[0]} <span className="hidden md:inline">{activeMatchData?.teamA?.name.split(' ')[1] || 'GOLEM'}</span></h2><div className="mt-2 h-1 w-full bg-gradient-to-r from-cyan-500 to-transparent shadow-[0_0_10px_#00d2ff]"></div></div><div className="text-right"><h2 className="text-2xl md:text-5xl font-cinzel font-black text-transparent bg-clip-text bg-gradient-to-b from-red-100 to-red-600 tracking-widest drop-shadow-[0_0_15px_rgba(239,68,68,0.4)]" style={{ color: activeMatchData?.teamB?.color }}><span className="hidden md:inline">{activeMatchData?.teamB?.name.split(' ')[0] || 'CRIMSON'}</span> {activeMatchData?.teamB?.name.split(' ')[1] || 'GOLEM'}</h2><div className="mt-2 h-1 w-full bg-gradient-to-l from-red-500 to-transparent shadow-[0_0_10px_#ef4444]"></div></div></div>
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-20"><span className="text-[12rem] font-black italic text-[#dcb06b] font-orbitron select-none">VS</span></div>
-                <div className="space-y-4 relative z-10">{ROLES_ORDER.map((role) => <div key={role} className="grid grid-cols-2 gap-12 md:gap-32 items-center"><div>{renderPlayerCard(role, 'azure')}</div><div>{renderPlayerCard(role, 'crimson')}</div></div>)}</div>
+            {wheelState?.isOpen && <SpinWheel {...wheelState} roleName={wheelState.role} roomId={activeRoomId} onComplete={handleWheelComplete} onCancel={() => setWheelState(null)} />}
+            <div className="absolute top-8 left-8 right-8 z-50 flex justify-between">
+                <Button variant="outline" size="sm" onClick={() => setPhase('OVERVIEW')}>BACK TO BRACKET</Button>
+                <div className="text-white font-orbitron font-black text-2xl tracking-[0.4em]">{activeRoomId}</div>
             </div>
-            <div className="fixed bottom-0 left-0 right-0 p-8 z-50 flex justify-center items-end h-28 pointer-events-none">
-                <div className="pointer-events-auto">
-                    {revealedSlots.size < 10 ? 
-                       <button onClick={handleNextReveal} className="group relative px-16 h-16 bg-[#0a1a2f] border-2 border-[#dcb06b] clip-corner-md flex items-center justify-center text-[#dcb06b] font-cinzel font-bold text-base hover:bg-[#dcb06b] hover:text-[#05090f] transition-all duration-300 shadow-[0_0_30px_rgba(220,176,107,0.4)]">{getRevealButtonText()}</button> 
-                       : 
-                       <Button onClick={() => setPhase('TRANSITION')} size="lg" className="px-24 h-16 text-lg animate-pulse shadow-[0_0_40px_rgba(220,176,107,0.5)]">INITIALIZE BATTLE</Button>
-                    }
+            <div className="relative max-w-7xl mx-auto w-full flex-1 flex flex-col justify-center px-10">
+                <div className="grid grid-cols-2 gap-32 items-end mb-6">
+                    <div className="text-left"><h2 className="text-2xl md:text-5xl font-cinzel font-black text-cyan-400">{activeMatchData?.teamA?.name}</h2></div>
+                    <div className="text-right"><h2 className="text-2xl md:text-5xl font-cinzel font-black text-red-500">{activeMatchData?.teamB?.name}</h2></div>
                 </div>
+                <div className="space-y-4 relative z-10">{ROLES_ORDER.map((role) => <div key={role} className="grid grid-cols-2 gap-32"><div>{renderPlayerCard(role, 'azure')}</div><div>{renderPlayerCard(role, 'crimson')}</div></div>)}</div>
+            </div>
+            <div className="fixed bottom-10 left-0 right-0 flex justify-center">
+                 <Button onClick={() => setPhase('TRANSITION')} size="lg">INITIALIZE BATTLE</Button>
             </div>
         </div>
       )}
+      <ConfirmModal isOpen={showAbortConfirm} title="ABORT TOURNAMENT" message="End tournament?" onConfirm={onReset} onCancel={() => setShowAbortConfirm(false)} isDestructive />
     </div>
   );
 };

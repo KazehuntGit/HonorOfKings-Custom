@@ -16,112 +16,8 @@ import { PreparingModal } from './components/PreparingModal';
 import { CookieConsent } from './components/CookieConsent';
 import { setCookie, getCookie, eraseCookie } from './utils/cookies';
 
-const HOK_HEROES = [
-  // CLASH LANE
-  { name: "Arthur", roles: [Role.CLASH] },
-  { name: "Sun Ce", roles: [Role.CLASH, Role.JUNGLE] },
-  { name: "Kaizer", roles: [Role.CLASH, Role.JUNGLE] },
-  { name: "Biron", roles: [Role.CLASH] },
-  { name: "Li Xin", roles: [Role.CLASH] },
-  { name: "Charlotte", roles: [Role.CLASH] },
-  { name: "Lu Bu", roles: [Role.CLASH] },
-  { name: "Mulan", roles: [Role.CLASH] },
-  { name: "Guan Yu", roles: [Role.CLASH] },
-  { name: "Allain", roles: [Role.CLASH] },
-  { name: "Fuzi", roles: [Role.CLASH] },
-  { name: "Mayene", roles: [Role.CLASH, Role.JUNGLE] },
-  { name: "Ukyo Tachibana", roles: [Role.CLASH, Role.JUNGLE] },
-  { name: "Dharma", roles: [Role.CLASH, Role.JUNGLE] },
-  { name: "Ata", roles: [Role.CLASH, Role.ROAM] },
-  { name: "Dun", roles: [Role.CLASH, Role.ROAM] },
-  { name: "Yang Jian", roles: [Role.CLASH] },
-  { name: "Nezha", roles: [Role.CLASH] },
-  { name: "Menki", roles: [Role.CLASH] },
-
-  // JUNGLE
-  { name: "Lam", roles: [Role.JUNGLE] },
-  { name: "Prince of Lanling", roles: [Role.JUNGLE, Role.ROAM] },
-  { name: "Wukong", roles: [Role.JUNGLE] },
-  { name: "Li Bai", roles: [Role.JUNGLE] },
-  { name: "Han Xin", roles: [Role.JUNGLE] },
-  { name: "Luna", roles: [Role.JUNGLE, Role.MID] },
-  { name: "Nakoruru", roles: [Role.JUNGLE] },
-  { name: "Jing", roles: [Role.JUNGLE] },
-  { name: "Pei", roles: [Role.JUNGLE] },
-  { name: "Musashi", roles: [Role.JUNGLE, Role.CLASH] },
-  { name: "Zilong", roles: [Role.JUNGLE, Role.CLASH] },
-  { name: "Butterfly", roles: [Role.JUNGLE] },
-  { name: "Dian Wei", roles: [Role.JUNGLE, Role.CLASH] },
-  { name: "Fang", roles: [Role.JUNGLE, Role.FARM] },
-  { name: "Liu Bei", roles: [Role.JUNGLE] },
-  { name: "Cirrus", roles: [Role.JUNGLE] },
-  { name: "Augran", roles: [Role.JUNGLE] },
-  { name: "Cao Cao", roles: [Role.JUNGLE, Role.CLASH] },
-  { name: "Ying", roles: [Role.JUNGLE] },
-  { name: "Sima Yi", roles: [Role.JUNGLE, Role.MID] },
-  { name: "Yao", roles: [Role.JUNGLE, Role.CLASH] },
-  { name: "Agudo", roles: [Role.JUNGLE] },
-
-  // MID LANE
-  { name: "Angela", roles: [Role.MID] },
-  { name: "Diaochan", roles: [Role.MID] },
-  { name: "Xiao Qiao", roles: [Role.MID] },
-  { name: "Mai Shiranui", roles: [Role.MID, Role.JUNGLE] },
-  { name: "Lady Zhen", roles: [Role.MID] },
-  { name: "Milady", roles: [Role.MID] },
-  { name: "Heino", roles: [Role.MID, Role.CLASH] },
-  { name: "Kongming", roles: [Role.MID, Role.JUNGLE] },
-  { name: "Shangguan", roles: [Role.MID, Role.JUNGLE] },
-  { name: "Nuwa", roles: [Role.MID] },
-  { name: "Zhou Yu", roles: [Role.MID] },
-  { name: "Ying Zheng", roles: [Role.MID] },
-  { name: "Mozi", roles: [Role.MID, Role.ROAM] },
-  { name: "Dr. Bian", roles: [Role.MID] },
-  { name: "Gao Jianli", roles: [Role.MID] },
-  { name: "Princess Frost", roles: [Role.MID] },
-  { name: "Gan & Mo", roles: [Role.MID] },
-  { name: "Shen Mengxi", roles: [Role.MID] },
-  { name: "Yi Xing", roles: [Role.MID] },
-  { name: "Hailie", roles: [Role.MID] },
-  { name: "Chang'e", roles: [Role.MID, Role.JUNGLE] },
-
-  // FARM LANE
-  { name: "Luban No.7", roles: [Role.FARM] },
-  { name: "Marco Polo", roles: [Role.FARM] },
-  { name: "Hou Yi", roles: [Role.FARM] },
-  { name: "Consort Yu", roles: [Role.FARM] },
-  { name: "Di Renjie", roles: [Role.FARM] },
-  { name: "Arli", roles: [Role.FARM, Role.JUNGLE] },
-  { name: "Lady Sun", roles: [Role.FARM] },
-  { name: "Huang Zhong", roles: [Role.FARM] },
-  { name: "Garo", roles: [Role.FARM] },
-  { name: "Shouyue", roles: [Role.FARM] },
-  { name: "Alessio", roles: [Role.FARM] },
-  { name: "Loong", roles: [Role.FARM] },
-  { name: "Erin", roles: [Role.FARM] },
-  { name: "Meng Ya", roles: [Role.FARM] },
-  { name: "Laura", roles: [Role.FARM] },
-  { name: "Solarus", roles: [Role.FARM] },
-
-  // ROAM
-  { name: "Dolia", roles: [Role.ROAM] },
-  { name: "Kui", roles: [Role.ROAM] },
-  { name: "Zhuangzi", roles: [Role.ROAM, Role.CLASH] },
-  { name: "Zhang Fei", roles: [Role.ROAM] },
-  { name: "Da Qiao", roles: [Role.ROAM, Role.MID] },
-  { name: "Yaria", roles: [Role.ROAM] },
-  { name: "Ming", roles: [Role.ROAM] },
-  { name: "Cai Yan", roles: [Role.ROAM] },
-  { name: "Donghuang", roles: [Role.ROAM] },
-  { name: "Liu Shan", roles: [Role.ROAM] },
-  { name: "Sun Bin", roles: [Role.ROAM, Role.MID] },
-  { name: "Guiguzi", roles: [Role.ROAM] },
-  { name: "Taiyi", roles: [Role.ROAM] },
-  { name: "Lian Po", roles: [Role.ROAM, Role.CLASH] },
-  { name: "Dyadia", roles: [Role.ROAM] }
-];
-
 type ViewMode = 'lobby' | 'match' | 'battle' | 'bracket';
+interface Toast { id: string; message: string; isExiting: boolean; }
 
 // Persistence Keys
 const STORAGE_KEY_PLAYERS = 'hok_roster_data_v2';
@@ -135,7 +31,8 @@ const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 export default function App() {
   const [viewMode, setViewMode] = useState<ViewMode>('lobby');
   const [showCookieConsent, setShowCookieConsent] = useState(false);
-  
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
   // --- STATE INITIALIZATION WITH COOKIES (NOW LOCAL STORAGE) ---
 
   const [players, setPlayers] = useState<Player[]>(() => {
@@ -180,6 +77,7 @@ export default function App() {
   const [isBracketMode, setIsBracketMode] = useState(false);
   const [numBracketTeams, setNumBracketTeams] = useState(4);
   const [isSetupOpen, setIsSetupOpen] = useState(false);
+  const [setupStep, setSetupStep] = useState<1 | 2 | 3>(1); // 1: Config, 2: Roster, 3: Launch
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
@@ -204,7 +102,6 @@ export default function App() {
   const enableFullscreen = useCallback(() => {
     const elem = document.documentElement;
     if (!document.fullscreenElement) {
-        // Support for standard and older vendor-prefixed methods
         const req = elem.requestFullscreen || (elem as any).webkitRequestFullscreen || (elem as any).msRequestFullscreen;
         if (req) {
             req.call(elem).catch((err: any) => console.log("Fullscreen request blocked or failed:", err));
@@ -223,27 +120,21 @@ export default function App() {
   }, [enableFullscreen]);
 
   useEffect(() => {
-      // Attempt to enter fullscreen on the first interaction
       const activate = () => {
           enableFullscreen();
-          // Remove listeners once activated
           window.removeEventListener('click', activate);
           window.removeEventListener('touchstart', activate);
           window.removeEventListener('keydown', activate);
       };
-
       window.addEventListener('click', activate);
       window.addEventListener('touchstart', activate);
       window.addEventListener('keydown', activate);
-
       return () => {
           window.removeEventListener('click', activate);
           window.removeEventListener('touchstart', activate);
           window.removeEventListener('keydown', activate);
       };
   }, [enableFullscreen]);
-
-  // --- EFFECT HOOKS FOR PERSISTENCE ---
 
   useEffect(() => {
     const hasConsented = getCookie(COOKIE_CONSENT_KEY);
@@ -253,7 +144,7 @@ export default function App() {
   const handleAcceptCookies = () => {
     setCookie(COOKIE_CONSENT_KEY, 'true', 365);
     setShowCookieConsent(false);
-    enableFullscreen(); // Trigger fullscreen explicitly on consent click
+    enableFullscreen();
   };
 
   useEffect(() => {
@@ -268,7 +159,6 @@ export default function App() {
         stats: p.stats
       }));
       const hash = btoa(JSON.stringify(compactData));
-      // Increased hash limit to prevent URL updates from stopping for large rosters
       if (hash.length < 50000) {
          window.history.replaceState(null, '', `#${hash}`);
       }
@@ -279,16 +169,14 @@ export default function App() {
     setCookie(STORAGE_KEY_HISTORY, JSON.stringify(matchHistory), 30);
   }, [matchHistory]);
 
-  // Persist Active Match
   useEffect(() => {
       if (currentMatch) {
-          setCookie(STORAGE_KEY_ACTIVE_MATCH, JSON.stringify(currentMatch), 1); // 1 day expire
+          setCookie(STORAGE_KEY_ACTIVE_MATCH, JSON.stringify(currentMatch), 1);
       } else {
           eraseCookie(STORAGE_KEY_ACTIVE_MATCH);
       }
   }, [currentMatch]);
 
-  // Persist Active Bracket
   useEffect(() => {
       if (bracketMatch) {
           setCookie(STORAGE_KEY_ACTIVE_BRACKET, JSON.stringify(bracketMatch), 1);
@@ -297,9 +185,6 @@ export default function App() {
       }
   }, [bracketMatch]);
 
-
-  // --- NAVIGATION HANDLERS ---
-
   const navigate = useCallback((mode: ViewMode, data: any) => {
     setViewMode(mode);
     if (mode === 'lobby' && Array.isArray(data)) setPlayers(data);
@@ -307,12 +192,10 @@ export default function App() {
     else if (mode === 'bracket' && data) setBracketMatch(data);
   }, []);
 
-  // New: Minimize/Back to Lobby (Preserves Session)
   const handleBackToLobby = () => {
       setViewMode('lobby');
   };
 
-  // New: Resume Session
   const handleResumeSession = () => {
       if (currentMatch) {
           setViewMode('match');
@@ -323,7 +206,20 @@ export default function App() {
 
   const hasActiveSession = !!currentMatch || !!bracketMatch;
 
-  // --- GAME LOGIC ---
+  const dismissToast = (id: string) => {
+      setToasts(prev => prev.map(t => t.id === id ? { ...t, isExiting: true } : t));
+      setTimeout(() => {
+          setToasts(prev => prev.filter(t => t.id !== id));
+      }, 1000);
+  };
+
+  const addToast = (message: string) => {
+      const id = Date.now().toString() + Math.random().toString();
+      setToasts(prev => [...prev, { id, message, isExiting: false }]);
+      setTimeout(() => {
+          dismissToast(id);
+      }, 1500);
+  };
 
   const handleBatchProcess = (batchData: { name: string; roles: Role[]; isAllRoles: boolean; action?: 'add' | 'bench' }[]) => {
     setPlayers(prev => {
@@ -352,6 +248,16 @@ export default function App() {
       return updatedPlayers;
     });
     setErrorMsg(null);
+    batchData.forEach((item, index) => {
+        setTimeout(() => {
+            if (item.action === 'bench') {
+                 addToast(`${item.name} :: BENCHED`);
+            } else {
+                 const roleDisplay = item.isAllRoles ? 'ALL ROLES' : item.roles.map(r => r.replace(' Lane', '')).join(', ').toUpperCase();
+                 addToast(`${item.name} :: ${roleDisplay}`);
+            }
+        }, index * 300);
+    });
   };
 
   const removePlayer = (id: string) => setPlayers(prev => prev.filter(p => p.id !== id));
@@ -391,10 +297,8 @@ export default function App() {
       if (!roomId.trim() || roomId.length < 4) { setErrorMsg("Please enter a valid 4-digit Room ID."); return; }
     }
     
-    // Clear any existing session when starting new
     setCurrentMatch(null);
     setBracketMatch(null);
-
     setErrorMsg(null);
     setIsPreparing(true);
     setPrepError(null);
@@ -410,7 +314,6 @@ export default function App() {
         if (isBracketMode) {
             const validation = validateBracketPool(activePlayers, numBracketTeams);
             if (!validation.valid) throw new Error(validation.error);
-
             const result = generateBracketMatch(activePlayers, roomId, numBracketTeams);
             if (result) { 
                 setPrepMessage("GENERATING TOURNAMENT BRACKET...");
@@ -422,7 +325,6 @@ export default function App() {
         } else {
             const required = isCoachMode ? 12 : 10;
             if (activePlayers.length < required) throw new Error(`INSUFFICIENT PLAYERS: Need ${required} active players.`);
-            
             const result = generateMatch(activePlayers, roomId, isCoachMode);
             if (result) { 
                 setPrepMessage("FINALIZING BATTLE DATA...");
@@ -430,7 +332,7 @@ export default function App() {
                 setCurrentMatch(result); 
                 navigate('match', result); 
                 setIsSetupOpen(false);
-            } else { throw new Error("IMPOSSIBLE COMPOSITION: Unable to satisfy all role requirements."); }
+            } else { throw new Error("IMPOSSIBLE COMPOSITION."); }
         }
         setIsPreparing(false);
     } catch (err: any) {
@@ -491,11 +393,9 @@ export default function App() {
     const updatedPlayers = players.map(p => {
       let isLastMatchMvp = mvpId === p.id;
       if (!allMatchIds.has(p.id)) return { ...p, isLastMatchMvp: false };
-      
       const isAzure = azureIds.has(p.id);
       const isWinner = winner && ((isAzure && winner === 'azure') || (!isAzure && winner === 'crimson'));
       const newStats = { ...p.stats, matchesPlayed: p.stats.matchesPlayed + 1 };
-      
       if (winner) {
         if (isWinner) {
            newStats.wins += 1; newStats.currentStreak += 1;
@@ -506,23 +406,10 @@ export default function App() {
     });
     
     setPlayers(updatedPlayers); 
-    // Clear Active Match Session
     setCurrentMatch(null); 
     eraseCookie(STORAGE_KEY_ACTIVE_MATCH);
-
     navigate('lobby', updatedPlayers);
     setRoomId('');
-  };
-
-  const quickFill = () => {
-     const shuffledHeroes = [...HOK_HEROES].sort(() => 0.5 - Math.random());
-     const batchData = shuffledHeroes.slice(0, 15).map(hero => ({ name: hero.name, roles: hero.roles, isAllRoles: false, action: 'add' as const }));
-     for(let i=0; i<5; i++) batchData.push({ name: `Flex Player ${i+1}`, roles: [], isAllRoles: true, action: 'add' });
-     if (isCoachMode) {
-        batchData.push({ name: "Coach Gemik", roles: [Role.COACH], isAllRoles: false, action: 'add' });
-        batchData.push({ name: "Coach KPL", roles: [Role.COACH], isAllRoles: false, action: 'add' });
-     }
-     handleBatchProcess(batchData);
   };
 
   const handleClearHistory = () => {
@@ -537,11 +424,155 @@ export default function App() {
 
   const isRoomReady = roomId.length === 4;
 
+  const renderSetupWizard = () => {
+    return (
+        <div className="flex flex-col min-h-0 overflow-hidden h-full">
+             <div className="shrink-0 mb-6">
+                 <div className="flex items-center justify-between px-8 mb-2">
+                     <button onClick={() => setSetupStep(1)} className={`text-[10px] font-orbitron font-bold tracking-[0.2em] transition-colors hover:text-white cursor-pointer ${setupStep >= 1 ? 'text-[#dcb06b]' : 'text-[#4a5f78]'}`}>01 CONFIG</button>
+                     <button onClick={() => setSetupStep(2)} className={`text-[10px] font-orbitron font-bold tracking-[0.2em] transition-colors hover:text-white cursor-pointer ${setupStep >= 2 ? 'text-[#dcb06b]' : 'text-[#4a5f78]'}`}>02 ROSTER</button>
+                     <button onClick={() => setSetupStep(3)} className={`text-[10px] font-orbitron font-bold tracking-[0.2em] transition-colors hover:text-white cursor-pointer ${setupStep >= 3 ? 'text-[#dcb06b]' : 'text-[#4a5f78]'}`}>03 LAUNCH</button>
+                 </div>
+                 <div className="h-1 w-full bg-[#0a1a2f] flex">
+                     <div className={`flex-1 transition-all duration-500 ${setupStep >= 1 ? 'bg-[#dcb06b] shadow-[0_0_10px_#dcb06b]' : 'bg-[#1e3a5f]'}`}></div>
+                     <div className={`flex-1 transition-all duration-500 border-l border-[#0a1a2f] ${setupStep >= 2 ? 'bg-[#dcb06b] shadow-[0_0_10px_#dcb06b]' : 'bg-[#1e3a5f]'}`}></div>
+                     <div className={`flex-1 transition-all duration-500 border-l border-[#0a1a2f] ${setupStep >= 3 ? 'bg-[#dcb06b] shadow-[0_0_10px_#dcb06b]' : 'bg-[#1e3a5f]'}`}></div>
+                 </div>
+             </div>
+
+             <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar p-1 px-4 md:px-8">
+                {setupStep === 1 && (
+                    <div className="animate-slide-in space-y-6 md:space-y-8">
+                         {isBracketMode ? (
+                          <div className="relative group opacity-80">
+                            <div className="absolute -inset-[1px] bg-gradient-to-b from-white/10 to-transparent clip-corner-sm opacity-20"></div>
+                            <div className="bg-[#0a1a2f]/60 backdrop-blur-sm p-4 clip-corner-sm border border-[#1e3a5f] relative">
+                              <div className="flex justify-between items-center">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-1.5 h-1.5 bg-gray-500 rounded-full"></div>
+                                    <h3 className="text-xs text-[#8a9db8] font-cinzel font-bold tracking-[0.2em] uppercase">Battle Room</h3>
+                                  </div>
+                                  <span className="text-[9px] px-2 py-0.5 border border-white/10 rounded text-white/40 font-bold">AUTO-ASSIGN</span>
+                              </div>
+                              <div className="mt-2 text-[10px] text-[#4a5f78] font-orbitron tracking-wide leading-tight">Room IDs will be assigned individually per match.</div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="relative group">
+                            <div className="absolute -inset-[1px] bg-gradient-to-b from-[#dcb06b]/50 to-transparent clip-corner-md opacity-30"></div>
+                            <div className="bg-[#0a1a2f]/90 backdrop-blur-md p-6 clip-corner-md relative overflow-hidden">
+                              <div className="flex items-center justify-between mb-4 border-b border-[#dcb06b]/20 pb-2">
+                                <h3 className="text-sm text-[#dcb06b] font-cinzel font-bold tracking-[0.2em] uppercase">Battle Room</h3>
+                                <span className={`text-[10px] font-orbitron font-bold transition-colors duration-300 ${isRoomReady ? 'text-green-500' : 'text-red-500'}`}>LOBBY STATUS: {isRoomReady ? 'READY' : 'NOT READY'}</span>
+                              </div>
+                              <div className="relative"><input type="text" value={roomId} onChange={(e) => setRoomId(e.target.value.replace(/\D/g,'').slice(0,4))} placeholder="0000" className={`relative z-10 bg-black/40 border border-[#1e3a5f] p-4 text-3xl md:text-5xl font-orbitron font-black w-full text-center focus:outline-none tracking-[0.4em] transition-all duration-300 clip-corner-sm ${roomId ? 'text-white border-[#dcb06b] shadow-[0_0_15px_rgba(220,176,107,0.2)] animate-[chromatic_0.2s_infinite]' : 'text-[#4a5f78] opacity-60'} placeholder-[#1e3a5f]`} /></div>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {!isBracketMode && (
+                            <button onClick={() => setIsCoachMode(!isCoachMode)} className="relative w-full group overflow-hidden p-[3px] clip-corner-sm transition-all duration-300 transform hover:scale-[1.01] active:scale-[0.98]">
+                              {isCoachMode && <div className="absolute inset-[-100%] transition-opacity duration-700"><div className="absolute inset-0 bg-[conic-gradient(from_0deg,transparent_0deg,#dcb06b_60deg,#f3dcb1_120deg,transparent_180deg,#dcb06b_240deg,#f3dcb1_300deg,transparent_360deg)] animate-[spin_3s_linear_infinite]"></div></div>}
+                              <div className={`relative z-10 py-4 px-6 flex items-center justify-center transition-all duration-300 clip-corner-sm border h-full ${isCoachMode ? 'bg-black text-[#dcb06b] border-transparent shadow-[inset_0_0_20px_rgba(220,176,107,0.5)]' : 'bg-[#0a1a2f]/80 border-[#1e3a5f] text-[#4a5f78]'}`}><span className={`font-cinzel font-black text-xs tracking-[0.3em] uppercase transition-all duration-500 ${isCoachMode ? 'text-white drop-shadow-[0_0_10px_#dcb06b]' : ''}`}>COACH MODE {isCoachMode ? 'ON' : 'OFF'}</span></div>
+                            </button>
+                          )}
+                          <button onClick={() => { setIsBracketMode(!isBracketMode); if(!isBracketMode) setIsCoachMode(false); }} className="relative w-full group overflow-hidden p-[3px] clip-corner-sm transition-all duration-300 transform hover:scale-[1.01] active:scale-[0.98]">
+                            {isBracketMode && <div className="absolute inset-[-100%] transition-opacity duration-700"><div className="absolute inset-0 bg-[conic-gradient(from_0deg,transparent_0deg,#ffffff_60deg,#e2e8f0_120deg,transparent_180deg,#ffffff_240deg,#e2e8f0_300deg,transparent_360deg)] animate-[spin_3s_linear_infinite]"></div></div>}
+                            <div className={`relative z-10 py-4 px-6 flex items-center justify-center transition-all duration-300 clip-corner-sm border h-full ${isBracketMode ? 'bg-black text-white border-transparent shadow-[inset_0_0_20px_rgba(255,255,255,0.4)]' : 'bg-[#0a1a2f]/80 border-[#1e3a5f] text-[#4a5f78]'}`}><span className={`font-cinzel font-black text-xs tracking-[0.3em] uppercase transition-all duration-500 ${isBracketMode ? 'text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.8)]' : ''}`}>BRACKET MODE {isBracketMode ? 'ON' : 'OFF'}</span></div>
+                          </button>
+                        </div>
+
+                        {isBracketMode && (
+                          <div className="relative animate-slide-in">
+                            <div className="bg-[#0a1a2f]/80 border border-[#dcb06b]/30 p-4 clip-corner-sm">
+                                <div className="text-[10px] text-[#8a9db8] font-black uppercase tracking-widest mb-3 flex justify-between"><span>Number of Teams</span><span className="text-white font-orbitron">{numBracketTeams} TEAMS</span></div>
+                                <div className="flex gap-1">{[3, 4, 5, 6, 8, 12, 14, 16].map(n => (<button key={n} onClick={() => setNumBracketTeams(n)} className={`flex-1 py-2 font-orbitron font-bold text-xs clip-corner-sm border transition-all ${numBracketTeams === n ? 'bg-[#dcb06b] text-black border-[#dcb06b] shadow-[0_0_10px_#dcb06b]' : 'bg-black/40 text-[#4a5f78] border-[#1e3a5f]'}`}>{n}</button>))}</div>
+                                <div className="mt-2 text-[8px] text-[#4a5f78] uppercase text-center font-bold tracking-widest">Requires {numBracketTeams * 5} active players</div>
+                            </div>
+                          </div>
+                        )}
+                    </div>
+                )}
+
+                {setupStep === 2 && (
+                    <div className="animate-slide-in">
+                        <PlayerForm onBatchProcess={handleBatchProcess} isCoachMode={isCoachMode} />
+                    </div>
+                )}
+
+                {setupStep === 3 && (
+                    <div className="animate-slide-in space-y-6">
+                        <div className="relative group">
+                          <div className="absolute -inset-[1px] bg-gradient-to-b from-[#dcb06b]/50 to-transparent clip-corner-md opacity-30"></div>
+                          <div className="bg-[#0a1a2f]/90 backdrop-blur-md p-6 clip-corner-md relative">
+                            <div className="flex justify-between items-end mb-6">
+                                <div><div className="text-[#8a9db8] text-[10px] uppercase font-bold mb-1">Active Players</div><div className="flex items-baseline gap-2"><div className="text-5xl font-orbitron font-bold text-white">{activePlayers.length}</div><div className="text-xl font-orbitron font-bold text-[#4a5f78]">/ {players.length}</div></div></div>
+                            </div>
+                            
+                            <div className="mb-6 p-4 bg-black/40 border border-[#1e3a5f] clip-corner-sm">
+                                <h4 className="text-[#dcb06b] font-cinzel text-xs font-bold mb-2 tracking-widest">REQUIREMENTS</h4>
+                                <div className="space-y-2">
+                                    <div className="flex justify-between text-[10px] uppercase">
+                                        <span className="text-[#8a9db8]">Minimum Players</span>
+                                        <span className={activePlayers.length >= (isBracketMode ? numBracketTeams * 5 : (isCoachMode ? 12 : 10)) ? "text-green-500" : "text-red-500"}>
+                                            {isBracketMode ? numBracketTeams * 5 : (isCoachMode ? 12 : 10)} REQ
+                                        </span>
+                                    </div>
+                                    {!isBracketMode && (
+                                        <div className="flex justify-between text-[10px] uppercase">
+                                            <span className="text-[#8a9db8]">Room ID</span>
+                                            <span className={isRoomReady ? "text-green-500" : "text-red-500"}>{isRoomReady ? "VALID" : "INVALID"}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            {errorMsg && <div className="mb-4 p-3 border-l-2 border-red-500 bg-red-900/20 text-red-200 text-xs animate-pulse">{errorMsg}</div>}
+                          </div>
+                        </div>
+                    </div>
+                )}
+             </div>
+
+             <div className="shrink-0 p-4 md:p-8 pt-4 border-t border-[#1e3a5f] bg-[#05090f]/50 flex justify-between gap-4">
+                 {setupStep > 1 ? (
+                     <Button variant="secondary" onClick={() => setSetupStep(prev => (prev - 1) as 1|2|3)} className="w-32 border-[#1e3a5f] text-[#4a5f78] hover:text-white">BACK</Button>
+                 ) : (
+                     <div className="w-32"></div>
+                 )}
+
+                 {setupStep < 3 ? (
+                     <Button onClick={() => setSetupStep(prev => (prev + 1) as 1|2|3)} className="flex-1 max-w-xs">NEXT STEP</Button>
+                 ) : (
+                     <Button onClick={handleGenerate} disabled={activePlayers.length < (isBracketMode ? numBracketTeams * 5 : (isCoachMode ? 12 : 10)) || (!isBracketMode && !isRoomReady)} className="flex-1 max-w-xs shadow-[0_0_20px_rgba(220,176,107,0.3)] animate-pulse">START MATCHMAKING</Button>
+                 )}
+             </div>
+        </div>
+    );
+  };
+
   return (
     <div className="min-h-screen text-slate-200 font-inter overflow-x-hidden relative flex flex-col">
       <BackgroundParticles />
       <LocalClock />
       
+      <div className="fixed top-24 right-4 z-[3000] flex flex-col gap-2 pointer-events-none">
+          {toasts.map(toast => (
+              <div 
+                key={toast.id} 
+                className={`bg-[#0a1a2f]/95 border border-[#dcb06b] p-4 clip-corner-sm shadow-[0_0_20px_rgba(220,176,107,0.3)] pointer-events-auto flex items-center gap-3 min-w-[300px] transition-opacity duration-1000 ease-in-out ${toast.isExiting ? 'opacity-0' : 'opacity-100 animate-slide-in'}`}
+              >
+                  <div className="w-2 h-2 bg-[#dcb06b] rounded-full animate-pulse"></div>
+                  <span className="text-[#dcb06b] font-orbitron text-xs font-bold tracking-wide uppercase flex-1">{toast.message}</span>
+                  <button onClick={() => dismissToast(toast.id)} className="text-[#4a5f78] hover:text-white transition-colors ml-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                  </button>
+              </div>
+          ))}
+      </div>
+
       <PreparingModal isOpen={isPreparing} message={prepMessage} error={prepError} onClose={() => setIsPreparing(false)} />
       <ConfirmModal 
         isOpen={confirmState.isOpen}
@@ -563,8 +594,6 @@ export default function App() {
       {viewMode === 'lobby' && (
         <>
           <main className="relative z-10 pt-16 px-4 flex-grow max-w-7xl mx-auto w-full">
-            
-            {/* --- RESUME BANNER --- */}
             {hasActiveSession && (
                 <div className="mb-6 animate-slide-in">
                     <button 
@@ -591,81 +620,21 @@ export default function App() {
                 </div>
             )}
 
-            {/* FULL SCREEN BATTLE COMMAND OVERLAY */}
             {isSetupOpen && (
               <div className="fixed inset-0 z-[100] bg-[#05090f]/95 backdrop-blur-xl flex items-center justify-center p-2 md:p-4 animate-slide-in">
-                 <div className="w-full max-w-2xl bg-[#0a1a2f] border border-[#dcb06b] clip-corner-md relative shadow-[0_0_100px_rgba(0,0,0,0.8)] max-h-[95vh] flex flex-col">
+                 <div className="w-full max-w-2xl bg-[#0a1a2f] border border-[#dcb06b] clip-corner-md relative shadow-[0_0_100px_rgba(0,0,0,0.8)] max-h-[90vh] h-auto flex flex-col">
                     <div className="flex items-center justify-between p-4 md:p-6 border-b border-[#1e3a5f] bg-[#05090f]/50 shrink-0">
                        <h2 className="text-[#dcb06b] font-cinzel font-black text-lg md:text-xl tracking-[0.2em] flex items-center gap-3">
                           <div className="w-2 h-6 md:h-8 bg-[#dcb06b]"></div>
                           BATTLE CONFIGURATION
                        </h2>
                        <button onClick={() => setIsSetupOpen(false)} className="text-[#4a5f78] hover:text-white transition-colors">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 md:h-8 md:w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 md:h-8 md:w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                          </svg>
                        </button>
                     </div>
-
-                    <div className="p-4 md:p-8 space-y-6 md:space-y-8 overflow-y-auto custom-scrollbar">
-                        {isBracketMode ? (
-                          <div className="relative group opacity-80">
-                            <div className="absolute -inset-[1px] bg-gradient-to-b from-white/10 to-transparent clip-corner-sm opacity-20"></div>
-                            <div className="bg-[#0a1a2f]/60 backdrop-blur-sm p-4 clip-corner-sm border border-[#1e3a5f] relative">
-                              <div className="flex justify-between items-center">
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-1.5 h-1.5 bg-gray-500 rounded-full"></div>
-                                    <h3 className="text-xs text-[#8a9db8] font-cinzel font-bold tracking-[0.2em] uppercase">Battle Room</h3>
-                                  </div>
-                                  <span className="text-[9px] px-2 py-0.5 border border-white/10 rounded text-white/40 font-bold">AUTO-ASSIGN</span>
-                              </div>
-                              <div className="mt-2 text-[10px] text-[#4a5f78] font-orbitron tracking-wide leading-tight">Room IDs will be assigned individually per match.</div>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="relative group">
-                            <div className="absolute -inset-[1px] bg-gradient-to-b from-[#dcb06b]/50 to-transparent clip-corner-md opacity-30"></div>
-                            <div className="bg-[#0a1a2f]/90 backdrop-blur-md p-6 clip-corner-md relative overflow-hidden">
-                              <div className="flex items-center justify-between mb-4 border-b border-[#dcb06b]/20 pb-2">
-                                <h3 className="text-sm text-[#dcb06b] font-cinzel font-bold tracking-[0.2em] uppercase">Battle Room</h3>
-                                <span className={`text-[10px] font-orbitron font-bold transition-colors duration-300 ${isRoomReady ? 'text-green-500' : 'text-red-500'}`}>LOBBY STATUS: {isRoomReady ? 'READY' : 'NOT READY'}</span>
-                              </div>
-                              <div className="relative"><input type="text" value={roomId} onChange={(e) => setRoomId(e.target.value.replace(/\D/g,'').slice(0,4))} placeholder="0000" className={`relative z-10 bg-black/40 border border-[#1e3a5f] p-4 text-3xl md:text-5xl font-orbitron font-black w-full text-center focus:outline-none tracking-[0.4em] transition-all duration-300 clip-corner-sm ${roomId ? 'text-white border-[#dcb06b] shadow-[0_0_15px_rgba(220,176,107,0.2)] animate-[chromatic_0.2s_infinite]' : 'text-[#4a5f78] opacity-60'} placeholder-[#1e3a5f]`} /></div>
-                            </div>
-                          </div>
-                        )}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {!isBracketMode && (
-                            <button onClick={() => setIsCoachMode(!isCoachMode)} className="relative w-full group overflow-hidden p-[3px] clip-corner-sm transition-all duration-300 transform hover:scale-[1.01] active:scale-[0.98]">
-                              {isCoachMode && <div className="absolute inset-[-100%] transition-opacity duration-700"><div className="absolute inset-0 bg-[conic-gradient(from_0deg,transparent_0deg,#dcb06b_60deg,#f3dcb1_120deg,transparent_180deg,#dcb06b_240deg,#f3dcb1_300deg,transparent_360deg)] animate-[spin_3s_linear_infinite]"></div></div>}
-                              <div className={`relative z-10 py-4 px-6 flex items-center justify-center transition-all duration-300 clip-corner-sm border h-full ${isCoachMode ? 'bg-black text-[#dcb06b] border-transparent shadow-[inset_0_0_20px_rgba(220,176,107,0.5)]' : 'bg-[#0a1a2f]/80 border-[#1e3a5f] text-[#4a5f78]'}`}><span className={`font-cinzel font-black text-xs tracking-[0.3em] uppercase transition-all duration-500 ${isCoachMode ? 'text-white drop-shadow-[0_0_10px_#dcb06b]' : ''}`}>COACH MODE {isCoachMode ? 'ON' : 'OFF'}</span></div>
-                            </button>
-                          )}
-                          <button onClick={() => { setIsBracketMode(!isBracketMode); if(!isBracketMode) setIsCoachMode(false); }} className="relative w-full group overflow-hidden p-[3px] clip-corner-sm transition-all duration-300 transform hover:scale-[1.01] active:scale-[0.98]">
-                            {isBracketMode && <div className="absolute inset-[-100%] transition-opacity duration-700"><div className="absolute inset-0 bg-[conic-gradient(from_0deg,transparent_0deg,#ffffff_60deg,#e2e8f0_120deg,transparent_180deg,#ffffff_240deg,#e2e8f0_300deg,transparent_360deg)] animate-[spin_3s_linear_infinite]"></div></div>}
-                            <div className={`relative z-10 py-4 px-6 flex items-center justify-center transition-all duration-300 clip-corner-sm border h-full ${isBracketMode ? 'bg-black text-white border-transparent shadow-[inset_0_0_20px_rgba(255,255,255,0.4)]' : 'bg-[#0a1a2f]/80 border-[#1e3a5f] text-[#4a5f78]'}`}><span className={`font-cinzel font-black text-xs tracking-[0.3em] uppercase transition-all duration-500 ${isBracketMode ? 'text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.8)]' : ''}`}>BRACKET MODE {isBracketMode ? 'ON' : 'OFF'}</span></div>
-                          </button>
-                        </div>
-                        {isBracketMode && (
-                          <div className="relative animate-slide-in">
-                            <div className="bg-[#0a1a2f]/80 border border-[#dcb06b]/30 p-4 clip-corner-sm">
-                                <div className="text-[10px] text-[#8a9db8] font-black uppercase tracking-widest mb-3 flex justify-between"><span>Number of Teams</span><span className="text-white font-orbitron">{numBracketTeams} TEAMS</span></div>
-                                <div className="flex gap-1">{[3, 4, 5, 6, 8].map(n => (<button key={n} onClick={() => setNumBracketTeams(n)} className={`flex-1 py-2 font-orbitron font-bold text-xs clip-corner-sm border transition-all ${numBracketTeams === n ? 'bg-[#dcb06b] text-black border-[#dcb06b] shadow-[0_0_10px_#dcb06b]' : 'bg-black/40 text-[#4a5f78] border-[#1e3a5f]'}`}>{n}</button>))}</div>
-                                <div className="mt-2 text-[8px] text-[#4a5f78] uppercase text-center font-bold tracking-widest">Requires {numBracketTeams * 5} active players</div>
-                            </div>
-                          </div>
-                        )}
-                        <PlayerForm onBatchProcess={handleBatchProcess} isCoachMode={isCoachMode} />
-                        <div className="relative group">
-                          <div className="absolute -inset-[1px] bg-gradient-to-b from-[#dcb06b]/50 to-transparent clip-corner-md opacity-30"></div>
-                          <div className="bg-[#0a1a2f]/90 backdrop-blur-md p-6 clip-corner-md relative">
-                            <div className="flex justify-between items-end mb-6">
-                                <div><div className="text-[#8a9db8] text-[10px] uppercase font-bold mb-1">Active Players</div><div className="flex items-baseline gap-2"><div className="text-5xl font-orbitron font-bold text-white">{activePlayers.length}</div><div className="text-xl font-orbitron font-bold text-[#4a5f78]">/ {players.length}</div></div></div>
-                                <button onClick={quickFill} className="text-[10px] text-[#dcb06b] border border-[#dcb06b] px-3 py-1 hover:bg-[#dcb06b] hover:text-black transition-colors">Quick Fill</button>
-                            </div>
-                            {errorMsg && <div className="mb-4 p-3 border-l-2 border-red-500 bg-red-900/20 text-red-200 text-xs">{errorMsg}</div>}
-                            <Button onClick={handleGenerate} className="w-full" disabled={activePlayers.length < (isBracketMode ? numBracketTeams * 5 : (isCoachMode ? 12 : 10)) || (!isBracketMode && !isRoomReady)}>START MATCHMAKING</Button>
-                          </div>
-                        </div>
-                    </div>
+                    {renderSetupWizard()}
                  </div>
               </div>
             )}
@@ -706,12 +675,11 @@ export default function App() {
           activePlayers={activePlayers} 
           initialMode={viewMode === 'battle' ? 'battle' : 'draft'}
           onReset={() => { 
-              // Abort Logic
               setCurrentMatch(null); 
               eraseCookie(STORAGE_KEY_ACTIVE_MATCH);
               setViewMode('lobby'); 
           }}
-          onMinimize={handleBackToLobby} // Pass minimize handler
+          onMinimize={handleBackToLobby}
           onCompleteMatch={handleMatchFinish}
           onReroll={handleRerollSlot}
           onStartBattle={() => setViewMode('battle')}
@@ -727,7 +695,7 @@ export default function App() {
               eraseCookie(STORAGE_KEY_ACTIVE_BRACKET);
               setViewMode('lobby'); 
           }} 
-          onMinimize={handleBackToLobby} // Pass minimize handler
+          onMinimize={handleBackToLobby}
           activePlayers={activePlayers}
           onReroll={handleBracketReroll}
           onUpdatePlayer={handleUpdatePlayer}

@@ -208,7 +208,6 @@ export const MatchDisplay: React.FC<MatchDisplayProps> = ({
     }
   };
 
-  // Pass minimize to sub-components where needed or render generic back button overlay
   if (viewState === 'evaluation' && winningTeam) return (
      <>
         <div className="fixed top-6 left-6 z-[300]">
@@ -222,7 +221,7 @@ export const MatchDisplay: React.FC<MatchDisplayProps> = ({
   );
 
   if (viewState === 'celebration' && winningTeam) return (
-      <VictoryCelebration winner={winningTeam} teamSlots={winningTeam === 'azure' ? match.azureTeam : match.crimsonTeam} onDismiss={handleCelebrationDismiss} />
+      <VictoryCelebration winner={winningTeam} teamSlots={winningTeam === 'azure' ? match.azureTeam : match.crimsonTeam} azureTeamName={match.azureTeamName} crimsonTeamName={match.crimsonTeamName} onDismiss={handleCelebrationDismiss} />
   );
 
   if (viewState === 'transition') return (
@@ -233,7 +232,7 @@ export const MatchDisplay: React.FC<MatchDisplayProps> = ({
                 LOBBY
             </Button>
        </div>
-       <PortalTransition azureTeam={match.azureTeam} crimsonTeam={match.crimsonTeam} onComplete={handleTransitionComplete} />
+       <PortalTransition azureTeam={match.azureTeam} crimsonTeam={match.crimsonTeam} azureTeamName={match.azureTeamName} crimsonTeamName={match.crimsonTeamName} onComplete={handleTransitionComplete} />
     </>
   );
 
@@ -299,7 +298,7 @@ export const MatchDisplay: React.FC<MatchDisplayProps> = ({
   
   let buttonText = "START DRAFT";
   if (nextRoleName) {
-     const nextTeam = !revealedCards.has(getCardId('azure', nextRoleName)) ? 'AZURE' : 'CRIMSON';
+     const nextTeam = !revealedCards.has(getCardId('azure', nextRoleName)) ? match.azureTeamName : match.crimsonTeamName;
      buttonText = `SELECT ${nextTeam} ${formatRoleLabelShort(nextRoleName)}`;
   }
 
@@ -339,8 +338,8 @@ export const MatchDisplay: React.FC<MatchDisplayProps> = ({
         
         <div className="relative max-w-7xl mx-auto w-full flex-1 flex flex-col justify-center px-10">
           <div className="grid grid-cols-2 gap-12 md:gap-32 items-end mb-6">
-              <div className="text-left"><h2 className="text-2xl md:text-5xl font-cinzel font-black text-transparent bg-clip-text bg-gradient-to-b from-cyan-100 to-cyan-600 tracking-widest drop-shadow-[0_0_15px_rgba(6,182,212,0.4)]">AZURE <span className="hidden md:inline">GOLEM</span></h2><div className="mt-2 h-1 w-full bg-gradient-to-r from-cyan-500 to-transparent shadow-[0_0_10px_#00d2ff]"></div></div>
-              <div className="text-right"><h2 className="text-2xl md:text-5xl font-cinzel font-black text-transparent bg-clip-text bg-gradient-to-b from-red-100 to-red-600 tracking-widest drop-shadow-[0_0_15px_rgba(239,68,68,0.4)]"><span className="hidden md:inline">CRIMSON</span> GOLEM</h2><div className="mt-2 h-1 w-full bg-gradient-to-l from-red-500 to-transparent shadow-[0_0_10px_#ef4444]"></div></div>
+              <div className="text-left"><h2 className="text-2xl md:text-5xl font-cinzel font-black text-transparent bg-clip-text bg-gradient-to-b from-cyan-100 to-cyan-600 tracking-widest drop-shadow-[0_0_15px_rgba(6,182,212,0.4)] leading-tight whitespace-normal break-words">{match.azureTeamName}</h2><div className="mt-2 h-1 w-full bg-gradient-to-r from-cyan-500 to-transparent shadow-[0_0_10px_#00d2ff]"></div></div>
+              <div className="text-right"><h2 className="text-2xl md:text-5xl font-cinzel font-black text-transparent bg-clip-text bg-gradient-to-b from-red-100 to-red-600 tracking-widest drop-shadow-[0_0_15px_rgba(239,68,68,0.4)] leading-tight whitespace-normal break-words">{match.crimsonTeamName}</h2><div className="mt-2 h-1 w-full bg-gradient-to-l from-red-500 to-transparent shadow-[0_0_10px_#ef4444]"></div></div>
           </div>
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-20"><span className="text-[12rem] font-black italic text-[#dcb06b] font-orbitron select-none">VS</span></div>
           <div className="space-y-4 relative z-10">{displayRoles.map((role) => (<div key={role} className="grid grid-cols-2 gap-12 md:gap-32 items-center"><div>{renderPlayerCard(role, 'azure')}</div><div>{renderPlayerCard(role, 'crimson')}</div></div>))}</div>

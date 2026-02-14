@@ -36,9 +36,9 @@ export const MatchSummary: React.FC<MatchSummaryProps> = ({ match, onReset }) =>
              {/* AZURE TEAM - Wider */}
              <div className="flex-1 bg-gradient-to-r from-[#0a1a2f]/90 to-transparent p-6 border-l-8 border-cyan-500 clip-corner-md shadow-[0_0_30px_rgba(6,182,212,0.2)] relative min-w-[320px]">
                 <div className="mb-6 relative">
-                   <h2 className="text-2xl md:text-3xl font-cinzel font-black text-white tracking-[0.2em] drop-shadow-[0_0_15px_#00d2ff] flex items-center gap-4">
-                      <div className="w-3 h-8 bg-cyan-500 shadow-[0_0_15px_#00d2ff]"></div>
-                      AZURE GOLEM
+                   <h2 className="text-xl md:text-2xl font-cinzel font-black text-white tracking-[0.2em] drop-shadow-[0_0_15px_#00d2ff] flex items-center gap-4 uppercase leading-tight whitespace-normal break-words">
+                      <div className="w-3 h-8 bg-cyan-500 shadow-[0_0_15px_#00d2ff] shrink-0"></div>
+                      {match.azureTeamName}
                    </h2>
                 </div>
 
@@ -71,9 +71,9 @@ export const MatchSummary: React.FC<MatchSummaryProps> = ({ match, onReset }) =>
              {/* CRIMSON TEAM - Wider */}
              <div className="flex-1 bg-gradient-to-l from-[#1a0505]/90 to-transparent p-6 border-r-8 border-red-500 clip-corner-md text-right shadow-[0_0_30px_rgba(239,68,68,0.2)] relative min-w-[320px]">
                 <div className="mb-6 relative">
-                   <h2 className="text-2xl md:text-3xl font-cinzel font-black text-white tracking-[0.2em] drop-shadow-[0_0_15px_#ef4444] flex flex-row-reverse items-center gap-4">
-                      <div className="w-3 h-8 bg-red-500 shadow-[0_0_15px_#ef4444]"></div>
-                      CRIMSON GOLEM
+                   <h2 className="text-xl md:text-2xl font-cinzel font-black text-white tracking-[0.2em] drop-shadow-[0_0_15px_#ef4444] flex flex-row-reverse items-center gap-4 uppercase leading-tight whitespace-normal break-words">
+                      <div className="w-3 h-8 bg-red-500 shadow-[0_0_15px_#ef4444] shrink-0"></div>
+                      {match.crimsonTeamName}
                    </h2>
                 </div>
 
@@ -100,9 +100,9 @@ export const MatchSummary: React.FC<MatchSummaryProps> = ({ match, onReset }) =>
              <div className="flex flex-wrap justify-center gap-8">
                 <button 
                   onClick={() => onReset('azure')}
-                  className="group relative px-12 py-4 bg-[#0a1a2f] border-4 border-cyan-500 clip-corner-sm hover:bg-cyan-500 hover:text-black transition-all font-cinzel font-black text-2xl text-cyan-400 tracking-widest shadow-[0_0_20px_rgba(6,182,212,0.4)]"
+                  className="group relative px-12 py-4 bg-[#0a1a2f] border-4 border-cyan-500 clip-corner-sm hover:bg-cyan-500 hover:text-black transition-all font-cinzel font-black text-xl text-cyan-400 tracking-widest shadow-[0_0_20px_rgba(6,182,212,0.4)] uppercase"
                 >
-                   AZURE VICTORY
+                   {match.azureTeamName.split(' (')[0]} WIN
                 </button>
 
                 <Button onClick={() => onReset(null)} variant="secondary" className="px-10 h-16 border-[#8a9db8] text-[#8a9db8] text-sm">
@@ -111,9 +111,9 @@ export const MatchSummary: React.FC<MatchSummaryProps> = ({ match, onReset }) =>
 
                 <button 
                   onClick={() => onReset('crimson')}
-                  className="group relative px-12 py-4 bg-[#1a0505] border-4 border-red-500 clip-corner-sm hover:bg-red-500 hover:text-black transition-all font-cinzel font-black text-2xl text-red-500 tracking-widest shadow-[0_0_20px_rgba(239,68,68,0.4)]"
+                  className="group relative px-12 py-4 bg-[#1a0505] border-4 border-red-500 clip-corner-sm hover:bg-red-500 hover:text-black transition-all font-cinzel font-black text-xl text-red-500 tracking-widest shadow-[0_0_20px_rgba(239,68,68,0.4)] uppercase"
                 >
-                   CRIMSON VICTORY
+                   {match.crimsonTeamName.split(' (')[0]} WIN
                 </button>
              </div>
           </div>

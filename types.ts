@@ -35,6 +35,8 @@ export interface MatchResult {
   roomId: string;
   azureTeam: TeamSlot[];
   crimsonTeam: TeamSlot[];
+  azureTeamName: string;
+  crimsonTeamName: string;
   isCoachMode: boolean;
   timestamp: number;
 }

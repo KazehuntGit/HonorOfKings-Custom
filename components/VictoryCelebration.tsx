@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { Button } from './Button';
 import { TeamSlot } from '../types';
@@ -6,10 +7,12 @@ import { ROLES_ORDER, RoleIcons } from '../constants';
 interface VictoryCelebrationProps {
   winner: 'azure' | 'crimson';
   teamSlots: TeamSlot[];
+  azureTeamName: string;
+  crimsonTeamName: string;
   onDismiss: () => void;
 }
 
-export const VictoryCelebration: React.FC<VictoryCelebrationProps> = ({ winner, teamSlots, onDismiss }) => {
+export const VictoryCelebration: React.FC<VictoryCelebrationProps> = ({ winner, teamSlots, azureTeamName, crimsonTeamName, onDismiss }) => {
   const [particles, setParticles] = useState<number[]>([]);
 
   useEffect(() => {
@@ -20,7 +23,7 @@ export const VictoryCelebration: React.FC<VictoryCelebrationProps> = ({ winner, 
 
   const isAzure = winner === 'azure';
   const themeColor = isAzure ? '#00d2ff' : '#ef4444';
-  const teamName = isAzure ? "AZURE GOLEM" : "CRIMSON GOLEM";
+  const teamName = isAzure ? azureTeamName : crimsonTeamName;
 
   return (
     <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-[#05090f]/95 backdrop-blur-xl overflow-hidden animate-slide-in">
@@ -46,19 +49,6 @@ export const VictoryCelebration: React.FC<VictoryCelebrationProps> = ({ winner, 
 
         <div className="relative z-10 flex flex-col items-center animate-trophy-pop w-full max-w-5xl px-4">
             
-            {/* Crown / Stars */}
-            <div className="flex gap-4 mb-2">
-               <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-[#dcb06b] animate-bounce" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-               </svg>
-               <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-[#dcb06b] animate-bounce delay-100" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-               </svg>
-               <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-[#dcb06b] animate-bounce delay-75" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-               </svg>
-            </div>
-
             {/* Victory Text */}
             <h2 className="text-3xl md:text-5xl font-cinzel font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-[#dcb06b] tracking-[0.2em] drop-shadow-[0_2px_10px_rgba(220,176,107,0.5)] mb-2">
                 CONGRATULATIONS
@@ -66,7 +56,7 @@ export const VictoryCelebration: React.FC<VictoryCelebrationProps> = ({ winner, 
             
             <div className="flex items-center gap-4 mb-8">
                <div className={`h-[2px] w-12 md:w-20 ${isAzure ? 'bg-cyan-500' : 'bg-red-500'}`}></div>
-               <h1 className={`text-4xl md:text-6xl font-orbitron font-bold uppercase ${isAzure ? 'text-cyan-400' : 'text-red-500'} drop-shadow-[0_0_15px_currentColor]`}>
+               <h1 className={`text-4xl md:text-5xl font-orbitron font-bold uppercase ${isAzure ? 'text-cyan-400' : 'text-red-500'} drop-shadow-[0_0_15px_currentColor] text-center`}>
                    {teamName}
                </h1>
                <div className={`h-[2px] w-12 md:w-20 ${isAzure ? 'bg-cyan-500' : 'bg-red-500'}`}></div>
@@ -74,13 +64,9 @@ export const VictoryCelebration: React.FC<VictoryCelebrationProps> = ({ winner, 
 
             {/* Main Trophy Graphic */}
             <div className="relative mb-8 transform hover:scale-105 transition-transform duration-500 animate-float">
-                {/* Glow behind trophy */}
                 <div className="absolute inset-0 bg-[#dcb06b] blur-[50px] opacity-30"></div>
-                
-                {/* Trophy SVG */}
                 <svg width="180" height="180" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" className="drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)]">
                     <path d="M170 30H150V20C150 14.477 145.523 10 140 10H60C54.477 10 50 14.477 50 20V30H30C18.954 30 10 38.954 10 50V70C10 93.85 26.65 113.79 49.03 118.94C53.47 143.5 72.56 162.7 96 168.3V180H70C64.477 180 60 184.477 60 190H140C140 184.477 135.523 180 130 180H104V168.3C127.44 162.7 146.53 143.5 150.97 118.94C173.35 113.79 190 93.85 190 70V50C190 38.954 181.046 30 170 30ZM30 70V50C30 49.63 30.04 49.27 30.1 48.91C30.69 49.49 31.32 50 32 50H50V99.1C38.31 94.66 30 83.33 30 70ZM170 70C170 83.33 161.69 94.66 150 99.1V50H168C168.68 50 169.31 49.49 169.9 48.91C169.96 49.27 170 49.63 170 50V70Z" fill="url(#paint0_linear)"/>
-                    <path d="M100 60L120 90H80L100 60Z" fill="#FFF" fillOpacity="0.3"/>
                     <defs>
                         <linearGradient id="paint0_linear" x1="100" y1="10" x2="100" y2="190" gradientUnits="userSpaceOnUse">
                             <stop stopColor="#F3DCB1"/>
@@ -93,28 +79,18 @@ export const VictoryCelebration: React.FC<VictoryCelebrationProps> = ({ winner, 
 
             {/* Winning Roster Grid */}
             <div className="w-full mb-10">
-               <div className="flex flex-col items-center gap-1 mb-6">
-                  <span className="text-[#dcb06b] font-cinzel font-bold text-sm tracking-[0.5em] uppercase">Champions</span>
-                  <div className="h-[1px] w-32 bg-gradient-to-r from-transparent via-[#dcb06b] to-transparent"></div>
-               </div>
-               
-               <div className="grid grid-cols-1 md:grid-cols-5 gap-3 perspective-container">
+               <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
                   {ROLES_ORDER.map((role, idx) => {
                      const slot = teamSlots.find(s => s.role === role);
                      return (
                        <div 
                          key={role} 
-                         className="flex flex-col items-center p-3 bg-[#0a1a2f]/40 border border-[#dcb06b]/30 clip-corner-sm backdrop-blur-md transform transition-all duration-500 hover:scale-105 hover:bg-[#dcb06b]/10 tilt-card"
-                         style={{ animationDelay: `${idx * 100}ms` }}
+                         className="flex flex-col items-center p-3 bg-[#0a1a2f]/40 border border-[#dcb06b]/30 clip-corner-sm backdrop-blur-md transform transition-all duration-500 hover:scale-105 hover:bg-[#dcb06b]/10"
                        >
-                          {/* Role Icon (now text) - Centered */}
                           <div className="text-[#dcb06b] mb-2 opacity-80 flex items-center justify-center">
                              {RoleIcons[role]}
                           </div>
-                          
-                          {/* Removed duplicate role name text span here */}
-                          
-                          <span className="text-white font-orbitron font-bold text-sm md:text-base tracking-wide truncate max-w-full">
+                          <span className="text-white font-orbitron font-bold text-sm tracking-wide truncate max-w-full">
                              {slot?.player.name}
                           </span>
                        </div>
