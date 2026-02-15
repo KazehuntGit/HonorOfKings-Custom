@@ -18,6 +18,7 @@ export interface PlayerStats {
 export interface Player {
   id: string;
   name: string;
+  discordName?: string; // Nama akun Discord (opsional)
   roles: Role[]; 
   isAllRoles: boolean;
   isActive: boolean; // Menandakan apakah pemain ikut match kali ini

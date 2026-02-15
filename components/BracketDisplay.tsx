@@ -1,7 +1,7 @@
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { BracketMatchResult, Role, TeamSlot, Player, MatchResult, BracketTeam } from '../types';
-import { RoleIcons, ROLES_ORDER } from '../constants';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { BracketMatchResult, Role, TeamSlot, Player } from '../types';
+import { RoleIcons, ROLES_ORDER, RoleImagesActive } from '../constants'; // Using RoleImagesActive explicitly
 import { Button } from './Button';
 import { SpinWheel } from './SpinWheel';
 import { EvaluationScreen } from './EvaluationScreen';
@@ -9,7 +9,7 @@ import { MatchSummary } from './MatchSummary';
 import { PortalTransition } from './PortalTransition';
 import { VictoryCelebration } from './VictoryCelebration';
 import { ConfirmModal } from './ConfirmModal';
-import { getFlexibleCandidate, canPlay, TBD_PLAYER } from '../utils/matchmaker';
+import { canPlay, TBD_PLAYER } from '../utils/matchmaker';
 
 interface BracketDisplayProps {
   match: BracketMatchResult;
@@ -214,19 +214,14 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
       // Logika khusus 14 Tim
       if (numTeams === 14) {
           const r1: InternalMatch[] = [];
-          // 6 matches for first 12 teams (0-11)
           for (let i = 0; i < 6; i++) {
               r1.push({ id: i, label: `PLAY-IN ${i + 1}`, mode: 'BO1', teamA: getTeamObj(i * 2), teamB: getTeamObj(i * 2 + 1) });
           }
 
           const qm: InternalMatch[] = [];
-          // QF1: W(M0) vs W(M1)
           qm.push({ id: 6, label: 'QUARTER 1', mode: 'BO1', teamA: getWinnerTeam(0, r1[0].teamA, r1[0].teamB), teamB: getWinnerTeam(1, r1[1].teamA, r1[1].teamB) });
-          // QF2: W(M2) vs W(M3)
           qm.push({ id: 7, label: 'QUARTER 2', mode: 'BO1', teamA: getWinnerTeam(2, r1[2].teamA, r1[2].teamB), teamB: getWinnerTeam(3, r1[3].teamA, r1[3].teamB) });
-          // QF3: W(M4) vs T12 (Bye)
           qm.push({ id: 8, label: 'QUARTER 3', mode: 'BO1', teamA: getWinnerTeam(4, r1[4].teamA, r1[4].teamB), teamB: getTeamObj(12) });
-          // QF4: W(M5) vs T13 (Bye)
           qm.push({ id: 9, label: 'QUARTER 4', mode: 'BO1', teamA: getWinnerTeam(5, r1[5].teamA, r1[5].teamB), teamB: getTeamObj(13) });
 
           const sm: InternalMatch[] = [];
@@ -299,14 +294,11 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
   // LOTTERY LOGIC
   useEffect(() => {
       if (phase === 'MATCHUP_LOTTERY') {
-          // Determine which set of matches is the "First Round" based on team size
           const matchesToReveal = hasRoundOne ? roundOneMatches : quarterMatches;
-          
           if (lotteryRevealedCount <= matchesToReveal.length) {
               const timer = setTimeout(() => {
                   setLotteryRevealedCount(prev => prev + 1);
-                  // Play a small sound if possible, or trigger haptic
-              }, 1200); // 1.2s per matchup reveal
+              }, 1200); 
               return () => clearTimeout(timer);
           }
       }
@@ -403,19 +395,19 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
       : { bg: 'bg-[#1a0505]', border: 'border-[#ef4444]', glow: 'shadow-[0_0_15px_#ef4444]', text: 'text-[#ef4444]', gradient: 'from-[#c02d2d]/20 to-transparent' };
 
     return (
-      <div className={`relative h-16 w-full animate-slide-in perspective-container group`}>
+      <div className={`relative h-16 w-full max-w-md mx-auto animate-slide-in perspective-container group`}>
         <div className={`absolute inset-0 clip-corner-md border-l-4 tilt-card ${theme.bg} ${theme.border} ${theme.glow} shadow-[0_0_20px_rgba(0,0,0,0.6)] transition-all duration-300`}>
-           <div className={`flex flex-col h-full relative z-10 px-6 py-0 justify-center ${side === 'crimson' ? 'items-end text-right' : 'items-start text-left'}`}>
-             <div className={`mb-1 px-2 py-0.5 rounded-sm bg-black/50 border border-white/10 ${theme.text} scale-[0.8] origin-${side === 'crimson' ? 'right' : 'left'} opacity-90`}>
+           <div className={`flex flex-col h-full relative z-10 px-4 py-0 justify-center ${side === 'crimson' ? 'items-end text-right' : 'items-start text-left'}`}>
+             <div className={`mb-0.5 px-2 py-0.5 rounded-sm bg-black/50 border border-white/10 ${theme.text} scale-[0.75] origin-${side === 'crimson' ? 'right' : 'left'} opacity-90`}>
                 {RoleIcons[role]}
              </div>
-             <span className="block text-xl md:text-3xl font-bold text-white truncate font-orbitron drop-shadow-md w-full">
+             <span className="block text-lg md:text-xl font-bold text-white truncate font-orbitron drop-shadow-md w-full">
                 {player?.name}
              </span>
              <div className={`absolute inset-0 bg-gradient-to-r ${theme.gradient} opacity-50 pointer-events-none`}></div>
            </div>
            
-           <div className={`absolute top-2 z-50 flex gap-2 transition-all opacity-0 group-hover:opacity-100 ${side === 'azure' ? 'right-4' : 'left-4'}`}>
+           <div className={`absolute top-2 z-50 flex gap-2 transition-all opacity-0 group-hover:opacity-100 ${side === 'azure' ? 'right-2' : 'left-2'}`}>
               <button onClick={(e) => { 
                   e.stopPropagation(); 
                   if (teamIdx !== -1) {
@@ -426,8 +418,8 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
                           setWheelState({ isOpen: true, type: 'reroll', team: side, role, winnerName: newPlayer.name, winnerPlayer: newPlayer, candidates: candidates.map(p => p.name), duration: 4000 });
                       }
                   }
-              }} className="p-2.5 bg-black/60 hover:bg-[#dcb06b] rounded-full text-white hover:text-black transition-all" title="Reroll Player"><svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg></button>
-              <button onClick={(e) => { e.stopPropagation(); if(player) setRenameState({ isOpen: true, player, newName: player.name }); }} className="p-2.5 bg-black/60 hover:bg-[#00d2ff] rounded-full text-white hover:text-black transition-all" title="Change Nickname"><svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg></button>
+              }} className="p-1.5 bg-black/60 hover:bg-[#dcb06b] rounded-full text-white hover:text-black transition-all" title="Reroll Player"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg></button>
+              <button onClick={(e) => { e.stopPropagation(); if(player) setRenameState({ isOpen: true, player, newName: player.name }); }} className="p-1.5 bg-black/60 hover:bg-[#00d2ff] rounded-full text-white hover:text-black transition-all" title="Change Nickname"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg></button>
            </div>
         </div>
       </div>
@@ -518,6 +510,11 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
           <div className="min-h-screen bg-[#05090f] p-8 relative overflow-y-auto flex flex-col items-center">
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,#1e3a5f_0%,#05090f_80%)] opacity-30 pointer-events-none"></div>
               
+              {/* Back Button */}
+              <div className="fixed top-6 left-6 z-[300]">
+                  <Button variant="outline" size="sm" onClick={onMinimize} className="bg-black/80 border-[#dcb06b] text-[#dcb06b] hover:bg-[#dcb06b] hover:text-black shadow-[0_0_10px_rgba(220,176,107,0.3)]">LOBBY</Button>
+              </div>
+
               <div className="relative z-10 text-center mb-12 animate-slide-in">
                   <h1 className="text-4xl md:text-6xl font-cinzel font-black text-[#dcb06b] tracking-[0.3em] uppercase drop-shadow-[0_0_20px_rgba(220,176,107,0.5)]">
                       RANDOMIZING MATCHUPS
@@ -582,28 +579,47 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
   const renderTeamRevealScreen = () => {
      return (
         <div className="fixed inset-0 z-[150] bg-[#05090f] overflow-y-auto custom-scrollbar flex flex-col items-center">
-            {/* Background FX - Replicating Lobby Feel */}
+            
+            {/* --- IMMERSIVE BACKGROUND --- */}
+            {/* Hex Grid Overlay */}
+            <div className="absolute inset-0 pointer-events-none opacity-20" style={{ 
+                backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%231e3a5f' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+                backgroundSize: '60px 60px'
+            }}></div>
+            
+            {/* Fog & Mist Layers */}
             <div className="absolute inset-0 bg-[url('https://raw.githubusercontent.com/yoshiharuyamashita/css-fog-animation/master/img/fog1.png')] bg-repeat-x bg-cover opacity-10 animate-fog pointer-events-none"></div>
             <div className="absolute inset-0 bg-[url('https://raw.githubusercontent.com/yoshiharuyamashita/css-fog-animation/master/img/fog2.png')] bg-repeat-x bg-cover opacity-10 animate-fog pointer-events-none" style={{ animationDirection: 'reverse', animationDuration: '30s' }}></div>
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,#000000_100%)] pointer-events-none"></div>
             
-            <div className="relative z-10 w-full max-w-[1600px] p-4 md:p-8 lg:p-12 flex flex-col items-center min-h-screen">
+            {/* Spotlight Effect */}
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-[1200px] h-[600px] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#dcb06b]/10 via-transparent to-transparent pointer-events-none"></div>
+
+            {/* Back Button (Fixed) */}
+            <div className="fixed top-6 left-6 z-[300]">
+                <Button variant="outline" size="sm" onClick={onMinimize} className="bg-black/80 border-[#dcb06b] text-[#dcb06b] hover:bg-[#dcb06b] hover:text-black shadow-[0_0_10px_rgba(220,176,107,0.3)]">LOBBY</Button>
+            </div>
+            
+            <div className="relative z-10 w-full max-w-[1800px] p-4 md:p-8 lg:p-12 flex flex-col items-center min-h-screen">
                 
                 {/* Header Section */}
-                <div className="text-center mb-12 relative animate-slide-in">
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-[#dcb06b] blur-[120px] opacity-10 pointer-events-none"></div>
-                    <h1 className="text-4xl md:text-6xl lg:text-7xl font-cinzel font-black text-transparent bg-clip-text bg-gradient-to-b from-[#f3dcb1] via-[#dcb06b] to-[#8a6d3b] tracking-[0.15em] drop-shadow-[0_0_30px_rgba(220,176,107,0.4)] mb-4">
+                <div className="text-center mb-16 relative animate-slide-in mt-8">
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[140%] h-[140%] bg-[#dcb06b] blur-[100px] opacity-10 pointer-events-none"></div>
+                    <h1 className="text-5xl md:text-7xl lg:text-8xl font-cinzel font-black text-transparent bg-clip-text bg-gradient-to-b from-[#f3dcb1] via-[#dcb06b] to-[#8a6d3b] tracking-[0.15em] drop-shadow-[0_0_30px_rgba(220,176,107,0.4)] mb-4">
                         OFFICIAL DRAFT
                     </h1>
                     <div className="flex items-center justify-center gap-6">
-                         <div className="h-[1px] w-12 md:w-24 bg-gradient-to-r from-transparent to-[#dcb06b]"></div>
-                         <p className="text-[#8a9db8] font-orbitron tracking-[0.4em] text-[10px] md:text-xs font-bold uppercase">TOURNAMENT ROSTER REVEAL</p>
-                         <div className="h-[1px] w-12 md:w-24 bg-gradient-to-l from-transparent to-[#dcb06b]"></div>
+                         <div className="h-[2px] w-12 md:w-32 bg-gradient-to-r from-transparent to-[#dcb06b]"></div>
+                         <div className="flex flex-col items-center">
+                            <p className="text-[#8a9db8] font-orbitron tracking-[0.6em] text-[10px] md:text-sm font-bold uppercase">TOURNAMENT ROSTER REVEAL</p>
+                            <p className="text-[#4a5f78] font-orbitron tracking-[0.3em] text-[8px] uppercase mt-1">SECURE CONNECTION ESTABLISHED</p>
+                         </div>
+                         <div className="h-[2px] w-12 md:w-32 bg-gradient-to-l from-transparent to-[#dcb06b]"></div>
                     </div>
                 </div>
 
                 {/* Team Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 w-full mb-96">
+                {/* Added pb-48 to allow scrolling past the fixed footer */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8 w-full pb-48">
                     {match.teams.map((team, idx) => {
                         const isRevealed = revealedTeamIndices.has(idx);
                         
@@ -612,16 +628,16 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
                                 key={idx} 
                                 className={`
                                     relative group transition-all duration-700
-                                    ${isRevealed ? 'opacity-100 translate-y-0' : 'opacity-70 translate-y-4'}
+                                    ${isRevealed ? 'opacity-100 translate-y-0' : 'opacity-70 translate-y-8'}
                                 `}
                             >
-                                {/* Glow backing for revealed cards */}
-                                {isRevealed && <div className="absolute -inset-1 bg-[#dcb06b] blur-lg opacity-20 group-hover:opacity-30 transition-opacity duration-500"></div>}
+                                {/* Holographic Glow */}
+                                {isRevealed && <div className="absolute -inset-[2px] bg-gradient-to-b from-[#dcb06b]/50 to-transparent blur-md opacity-20 group-hover:opacity-40 transition-opacity duration-500 rounded-lg"></div>}
 
                                 <div className={`
-                                    relative bg-[#0a1a2f]/80 backdrop-blur-xl border 
-                                    ${isRevealed ? 'border-[#dcb06b] shadow-[0_0_30px_rgba(220,176,107,0.15)]' : 'border-[#1e3a5f]'} 
-                                    clip-corner-md p-1 h-full flex flex-col transition-colors duration-500
+                                    relative bg-[#0a1a2f]/80 backdrop-blur-xl border-t border-x border-b-2
+                                    ${isRevealed ? 'border-[#dcb06b] shadow-[0_0_40px_rgba(220,176,107,0.1)]' : 'border-[#1e3a5f]'} 
+                                    clip-corner-md h-full flex flex-col transition-all duration-500
                                 `}>
                                     {/* Scanning Line Animation if rolling */}
                                     {isGlobalRolling && !isRevealed && (
@@ -632,29 +648,33 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
                                     )}
 
                                     {/* Card Header */}
-                                    <div className="bg-[#05090f]/80 p-4 border-b border-white/5 relative overflow-hidden group-hover:bg-[#05090f]/90 transition-colors">
+                                    <div className="bg-[#05090f]/90 p-5 border-b border-white/5 relative overflow-hidden group-hover:bg-[#05090f] transition-colors">
                                         <div className="absolute top-0 right-0 p-2 opacity-10">
-                                            <span className="text-[50px] font-black font-orbitron text-white leading-none tracking-tighter">{String(idx + 1).padStart(2, '0')}</span>
+                                            <span className="text-[60px] font-black font-orbitron text-white leading-none tracking-tighter">{String(idx + 1).padStart(2, '0')}</span>
                                         </div>
-                                        <div className="relative z-10 flex flex-col gap-1">
+                                        <div className="relative z-10 flex flex-col gap-2">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-1.5 h-8 shadow-[0_0_10px_currentColor]" style={{ backgroundColor: team.color, color: team.color }}></div>
-                                                <h3 className="font-cinzel font-black text-white tracking-widest text-lg break-words leading-tight drop-shadow-md">{team.name}</h3>
+                                                <div className="w-1.5 h-10 shadow-[0_0_15px_currentColor]" style={{ backgroundColor: team.color, color: team.color }}></div>
+                                                <h3 className="font-cinzel font-black text-white tracking-widest text-xl break-words leading-tight drop-shadow-md">{team.name}</h3>
                                             </div>
                                             <div className={`text-[9px] font-orbitron font-bold tracking-wider uppercase pl-5 flex items-center gap-2 ${isRevealed ? 'text-[#dcb06b]' : 'text-[#4a5f78]'}`}>
-                                                <div className={`w-1.5 h-1.5 rounded-full ${isRevealed ? 'bg-[#dcb06b] animate-pulse' : 'bg-[#4a5f78]'}`}></div>
-                                                {isRevealed ? 'ROSTER CONFIRMED' : 'AWAITING DECRYPTION...'}
+                                                <div className={`w-1.5 h-1.5 rounded-full ${isRevealed ? 'bg-[#dcb06b] animate-pulse shadow-[0_0_5px_#dcb06b]' : 'bg-[#4a5f78]'}`}></div>
+                                                {isRevealed ? <ScrambleText text="ROSTER CONFIRMED" isRevealed={true} /> : 'AWAITING DECRYPTION...'}
                                             </div>
                                         </div>
                                     </div>
 
                                     {/* Card Body (Roles) */}
-                                    <div className="p-4 space-y-3 flex-1 bg-gradient-to-b from-[#0a1a2f]/40 to-[#05090f]/60">
+                                    <div className="p-4 space-y-3 flex-1 bg-gradient-to-b from-[#0a1a2f]/40 to-[#05090f]/60 relative">
+                                        {/* Grid lines decoration */}
+                                        <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'linear-gradient(#dcb06b 1px, transparent 1px)', backgroundSize: '100% 20px' }}></div>
+                                        
                                         {ROLES_ORDER.map((role, rIdx) => {
                                             const player = getAssignedPlayer(idx, role);
+                                            const roleImg = RoleImagesActive[role]; // USING ACTIVE ICON EXPLICITLY
                                             return (
-                                                <div key={role} className="flex items-center gap-3 relative group/row">
-                                                    {/* Change Nickname Button (Was Role Icon) */}
+                                                <div key={role} className="flex items-center gap-3 relative group/row z-10">
+                                                    {/* Change Nickname Button - NOW WITH ROLE ICON */}
                                                     <button 
                                                         onClick={(e) => { 
                                                             e.stopPropagation(); 
@@ -662,16 +682,20 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
                                                         }}
                                                         disabled={!isRevealed || !player || player.id === 'tbd'}
                                                         className={`
-                                                            w-8 h-8 flex items-center justify-center rounded bg-[#05090f] border transition-all duration-300
+                                                            w-10 h-10 flex items-center justify-center rounded-full bg-[#05090f] border transition-all duration-300
                                                             ${isRevealed 
-                                                                ? 'border-[#dcb06b]/40 text-[#dcb06b] shadow-[0_0_10px_rgba(220,176,107,0.2)] hover:bg-[#dcb06b] hover:text-[#05090f] cursor-pointer' 
-                                                                : 'border-[#1e3a5f] text-[#4a5f78] cursor-default'}
+                                                                ? 'border-[#dcb06b]/40 shadow-[0_0_10px_rgba(220,176,107,0.2)] hover:border-[#dcb06b] hover:scale-110 cursor-pointer' 
+                                                                : 'border-[#1e3a5f] opacity-50 cursor-default grayscale'}
                                                         `}
-                                                        title="Edit Nickname"
+                                                        title={isRevealed ? "Edit Nickname" : ""}
                                                     >
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                                        </svg>
+                                                        {roleImg ? (
+                                                            <img src={roleImg} alt={role} className="w-full h-full object-contain p-1.5" />
+                                                        ) : (
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ${isRevealed ? 'text-[#dcb06b]' : 'text-[#4a5f78]'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                                            </svg>
+                                                        )}
                                                     </button>
 
                                                     {/* Player Name & Full Role Name */}
@@ -699,8 +723,8 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
                                     </div>
 
                                     {/* Card Footer */}
-                                    <div className="h-1 w-full flex">
-                                        <div className={`h-full flex-1 transition-all duration-1000 ${isRevealed ? 'bg-[#dcb06b] shadow-[0_0_10px_#dcb06b]' : 'bg-[#1e3a5f]'}`}></div>
+                                    <div className="h-1.5 w-full flex">
+                                        <div className={`h-full flex-1 transition-all duration-1000 ${isRevealed ? 'bg-[#dcb06b] shadow-[0_0_15px_#dcb06b]' : 'bg-[#1e3a5f]'}`}></div>
                                         <div className="h-full w-4 bg-[#05090f]"></div>
                                         <div className={`h-full w-8 transition-all duration-1000 ${isRevealed ? 'bg-[#dcb06b]' : 'bg-[#1e3a5f]'}`}></div>
                                     </div>
@@ -708,51 +732,74 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
                             </div>
                         );
                     })}
+                    
+                    {/* SPACER ELEMENT: Allows scrolling past the footer */}
+                    <div className="h-40 w-full shrink-0 col-span-full"></div>
                 </div>
 
-                {/* Footer Controls */}
-                <div className="fixed bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-[#05090f] via-[#05090f]/95 to-transparent z-50 flex flex-col items-center pointer-events-none">
-                    <div className="pointer-events-auto flex flex-col items-center gap-4">
-                        {!isGlobalRevealComplete ? (
-                            <button 
-                                onClick={handleStartGlobalReveal} 
-                                disabled={isGlobalRolling}
-                                className={`
-                                    group relative px-20 py-5 bg-[#0a1a2f] border border-[#dcb06b] clip-corner-md 
-                                    text-[#dcb06b] font-cinzel font-black text-xl tracking-[0.2em] 
-                                    hover:bg-[#dcb06b] hover:text-[#05090f] transition-all duration-300
-                                    ${isGlobalRolling ? 'opacity-50 cursor-not-allowed' : 'shadow-[0_0_30px_rgba(220,176,107,0.3)] hover:shadow-[0_0_50px_rgba(220,176,107,0.6)] animate-pulse'}
-                                `}
-                            >
-                                <div className="absolute inset-0 bg-[#dcb06b] opacity-0 group-hover:opacity-10 transition-opacity"></div>
-                                <span className="relative z-10 flex items-center gap-4">
-                                    {isGlobalRolling ? (
-                                        <>
-                                            <svg className="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                                            DECRYPTING...
-                                        </>
-                                    ) : (
-                                        <>COMMENCE REVEAL</>
-                                    )}
-                                </span>
-                            </button>
-                        ) : (
-                            <button 
-                                onClick={() => setPhase('MATCHUP_LOTTERY')} 
-                                className="group relative px-24 py-6 bg-[#dcb06b] text-[#05090f] clip-corner-md font-cinzel font-black text-2xl tracking-[0.2em] hover:bg-white hover:scale-105 transition-all shadow-[0_0_50px_rgba(220,176,107,0.6)]"
-                            >
-                                START BRACKET
-                            </button>
-                        )}
+                {/* Footer Controls - Redesigned as a Command Console */}
+                <div className="fixed bottom-0 left-0 right-0 z-50 flex flex-col items-center">
+                    {/* Decorative Top Border */}
+                    <div className="h-1 w-full bg-gradient-to-r from-transparent via-[#dcb06b] to-transparent opacity-50"></div>
+                    
+                    <div className="w-full bg-[#05090f]/90 backdrop-blur-xl p-6 md:p-8 flex flex-col items-center justify-center border-t border-[#dcb06b]/20 shadow-[0_-10px_50px_rgba(0,0,0,0.8)]">
+                         <div className="pointer-events-auto flex flex-col items-center gap-4">
+                            {!isGlobalRevealComplete ? (
+                                <button 
+                                    onClick={handleStartGlobalReveal} 
+                                    disabled={isGlobalRolling}
+                                    className={`
+                                        group relative px-20 py-5 bg-[#0a1a2f] border border-[#dcb06b] clip-corner-md 
+                                        text-[#dcb06b] font-cinzel font-black text-xl tracking-[0.2em] 
+                                        hover:bg-[#dcb06b] hover:text-[#05090f] transition-all duration-300
+                                        ${isGlobalRolling ? 'opacity-50 cursor-not-allowed' : 'shadow-[0_0_30px_rgba(220,176,107,0.3)] hover:shadow-[0_0_50px_rgba(220,176,107,0.6)] animate-pulse'}
+                                    `}
+                                >
+                                    <div className="absolute inset-0 bg-[#dcb06b] opacity-0 group-hover:opacity-10 transition-opacity"></div>
+                                    <span className="relative z-10 flex items-center gap-4">
+                                        {isGlobalRolling ? (
+                                            <>
+                                                <svg className="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                                DECRYPTING...
+                                            </>
+                                        ) : (
+                                            <>COMMENCE REVEAL</>
+                                        )}
+                                    </span>
+                                </button>
+                            ) : (
+                                <button 
+                                    onClick={() => setPhase('MATCHUP_LOTTERY')} 
+                                    className="group relative px-24 py-6 bg-[#dcb06b] text-[#05090f] clip-corner-md font-cinzel font-black text-2xl tracking-[0.2em] hover:bg-white hover:scale-105 transition-all shadow-[0_0_50px_rgba(220,176,107,0.6)]"
+                                >
+                                    START BRACKET
+                                </button>
+                            )}
 
-                        {!isGlobalRolling && !isGlobalRevealComplete && (
-                            <button onClick={() => setPhase('MATCHUP_LOTTERY')} className="text-[#4a5f78] hover:text-[#dcb06b] text-[10px] font-orbitron font-bold uppercase tracking-widest border-b border-transparent hover:border-[#dcb06b] transition-all">
-                                Skip Animation &gt;&gt;
-                            </button>
-                        )}
+                            {!isGlobalRolling && !isGlobalRevealComplete && (
+                                <button onClick={() => setPhase('MATCHUP_LOTTERY')} className="text-[#4a5f78] hover:text-[#dcb06b] text-[10px] font-orbitron font-bold uppercase tracking-widest border-b border-transparent hover:border-[#dcb06b] transition-all">
+                                    Skip Animation &gt;&gt;
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
+
+            {/* Rename Modal Integration - Added to fix bug where modal wasn't rendering */}
+            {renameState.isOpen && (
+                <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+                  <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setRenameState({ isOpen: false, player: null, newName: '' })}></div>
+                  <div className="relative w-full max-w-sm bg-[#0a1a2f] border border-[#dcb06b] clip-corner-md shadow-[0_0_30px_rgba(220,176,107,0.3)] animate-slide-in p-6">
+                    <h3 className="text-[#dcb06b] font-cinzel font-bold text-lg mb-4 text-center tracking-widest">CHANGE NICKNAME</h3>
+                    <input type="text" value={renameState.newName} onChange={e => setRenameState({ ...renameState, newName: e.target.value })} className="w-full bg-black/50 border border-[#1e3a5f] p-3 text-white font-orbitron focus:border-[#dcb06b] outline-none mb-6 text-center" autoFocus />
+                    <div className="flex gap-3">
+                      <Button variant="secondary" onClick={() => setRenameState({ isOpen: false, player: null, newName: '' })} className="flex-1">CANCEL</Button>
+                      <Button onClick={submitRename} className="flex-1">CONFIRM</Button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
             <style>{`
                 @keyframes scan {
@@ -772,6 +819,9 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
 
   if (phase === 'TOURNAMENT_END') return (
       <div className="fixed inset-0 z-[300] flex flex-col items-center justify-center bg-[#05090f] overflow-hidden">
+        <div className="absolute top-6 left-6 z-[300]">
+              <Button variant="outline" size="sm" onClick={onMinimize} className="bg-black/80 border-[#dcb06b] text-[#dcb06b] hover:bg-[#dcb06b] hover:text-black">LOBBY</Button>
+        </div>
         <div className="god-rays opacity-40"></div>
         <div className="relative z-20 flex flex-col items-center animate-trophy-pop w-full max-w-4xl">
             <h1 className="text-5xl md:text-8xl font-cinzel font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-[#dcb06b] mb-12 tracking-[0.2em] text-center px-4">TOURNAMENT CHAMPIONS</h1>
@@ -789,7 +839,7 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
 
   if (phase === 'TEAM_REVEAL') return renderTeamRevealScreen();
   if (phase === 'MATCHUP_LOTTERY') return renderMatchupLottery();
-  if (phase === 'TRANSITION' && activeMatchData) return <>{overlayBackButton}<PortalTransition azureTeam={activeMatchData.teamA?.slots || []} crimsonTeam={activeMatchData.teamB?.slots || []} azureTeamName={activeMatchData.teamA?.name || 'TBD'} crimsonTeamName={activeMatchData.teamB?.name || 'TBD'} onComplete={() => setPhase('DECLARE_WIN')} /></>;
+  if (phase === 'TRANSITION' && activeMatchData) return <>{overlayBackButton}<PortalTransition azureTeam={activeMatchData.teamA?.slots || []} crimsonTeam={activeMatchData.teamB?.slots || []} azureTeamName={activeMatchData.teamA?.name || 'TBD'} crimsonTeamName={activeMatchData.teamB?.name || 'TBD'} roomId={activeRoomId} onComplete={() => setPhase('DECLARE_WIN')} /></>;
   if (phase === 'DECLARE_WIN' && activeMatchData) return <>{overlayBackButton}<MatchSummary match={{ roomId: activeRoomId, azureTeam: activeMatchData.teamA?.slots || [], crimsonTeam: activeMatchData.teamB?.slots || [], isCoachMode: false, timestamp: Date.now(), azureTeamName: activeMatchData.teamA?.name, crimsonTeamName: activeMatchData.teamB?.name }} onReset={(w) => { if(!w) setPhase('OVERVIEW'); else { setCurrentRoundWinner(w); setPhase('CELEBRATION'); } }} /></>;
   if (phase === 'CELEBRATION' && currentRoundWinner && activeMatchData) return <VictoryCelebration winner={currentRoundWinner} teamSlots={(currentRoundWinner === 'azure' ? activeMatchData.teamA?.slots : activeMatchData.teamB?.slots) || []} azureTeamName={activeMatchData.teamA?.name} crimsonTeamName={activeMatchData.teamB?.name} onDismiss={() => setPhase('EVALUATION')} />;
   if (phase === 'EVALUATION' && currentRoundWinner && activeMatchData) return <>{overlayBackButton}<EvaluationScreen match={{ roomId: activeRoomId, azureTeam: activeMatchData.teamA?.slots || [], crimsonTeam: activeMatchData.teamB?.slots || [], isCoachMode: false, timestamp: Date.now(), azureTeamName: activeMatchData.teamA?.name, crimsonTeamName: activeMatchData.teamB?.name }} winner={currentRoundWinner} onComplete={handleEvaluationComplete} /></>;
@@ -801,7 +851,7 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
     <div className="fixed inset-0 z-[100] bg-[#05090f] overflow-x-auto overflow-y-auto font-inter">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,#0a1a2f_0%,#05090f_60%)] pointer-events-none"></div>
       
-      {/* Rename Modal UI */}
+      {/* Rename Modal UI - This handles the Battle Phase modal */}
       {renameState.isOpen && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setRenameState({ isOpen: false, player: null, newName: '' })}></div>
@@ -862,10 +912,26 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
       ) : (
         <div className="w-full max-w-7xl mx-auto px-6 py-6 pb-28 relative h-screen flex flex-col justify-center overflow-hidden">
             {wheelState?.isOpen && <SpinWheel {...wheelState} roleName={wheelState.role} roomId={activeRoomId} onComplete={handleWheelComplete} onCancel={() => setWheelState(null)} />}
-            <div className="absolute top-8 left-8 right-8 z-50 flex justify-between">
+            
+            {/* Top Bar with Centered Room ID */}
+            <div className="absolute top-8 left-8 right-8 z-50 flex justify-between items-start">
                 <Button variant="outline" size="sm" onClick={() => setPhase('OVERVIEW')}>BACK TO BRACKET</Button>
-                <div className="text-white font-orbitron font-black text-2xl tracking-[0.4em]">{activeRoomId}</div>
+                
+                {/* Centered Room ID Display */}
+                <div className="absolute left-1/2 -translate-x-1/2 top-0 flex flex-col items-center gap-0 scale-[0.85] origin-top">
+                    <span className="text-[#dcb06b] font-orbitron text-[10px] tracking-[0.5em] font-black uppercase mb-1 opacity-70">ROOM ID</span>
+                    <div className="relative">
+                        <div className="absolute -inset-2 bg-[#dcb06b] blur-[15px] opacity-20 pointer-events-none"></div>
+                        <div className="relative bg-black/90 border border-[#dcb06b]/50 px-8 py-2 clip-corner-sm flex flex-col items-center shadow-[0_0_20px_rgba(220,176,107,0.3)]">
+                            <span className="text-2xl font-orbitron font-black text-white tracking-[0.4em] drop-shadow-[0_0_10px_#dcb06b]">{activeRoomId}</span>
+                        </div>
+                    </div>
+                </div>
+                
+                {/* Empty div to balance flex layout if needed, or remove */}
+                <div className="w-[100px]"></div> 
             </div>
+
             <div className="relative max-w-7xl mx-auto w-full flex-1 flex flex-col justify-center px-10">
                 <div className="grid grid-cols-2 gap-32 items-end mb-6">
                     <div className="text-left"><h2 className="text-2xl md:text-5xl font-cinzel font-black text-cyan-400">{activeMatchData?.teamA?.name}</h2></div>

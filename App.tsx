@@ -221,7 +221,7 @@ export default function App() {
       }, 1500);
   };
 
-  const handleBatchProcess = (batchData: { name: string; roles: Role[]; isAllRoles: boolean; action?: 'add' | 'bench' }[]) => {
+  const handleBatchProcess = (batchData: { name: string; discordName?: string; roles: Role[]; isAllRoles: boolean; action?: 'add' | 'bench' }[]) => {
     setPlayers(prev => {
       let updatedPlayers = [...prev];
       batchData.forEach(item => {
@@ -231,11 +231,18 @@ export default function App() {
            if (existingIndex !== -1) updatedPlayers[existingIndex] = { ...updatedPlayers[existingIndex], isActive: false };
         } else {
            if (existingIndex !== -1) {
-              updatedPlayers[existingIndex] = { ...updatedPlayers[existingIndex], roles: item.roles, isAllRoles: item.isAllRoles, isActive: true };
+              updatedPlayers[existingIndex] = { 
+                  ...updatedPlayers[existingIndex], 
+                  roles: item.roles, 
+                  isAllRoles: item.isAllRoles, 
+                  isActive: true,
+                  discordName: item.discordName || updatedPlayers[existingIndex].discordName // Update discord name if provided
+              };
            } else {
               updatedPlayers.push({
                  id: crypto.randomUUID(),
                  name: item.name,
+                 discordName: item.discordName, // Add new field
                  roles: item.roles,
                  isAllRoles: item.isAllRoles,
                  isActive: true,

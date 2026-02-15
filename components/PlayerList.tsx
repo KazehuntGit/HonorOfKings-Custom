@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Player, Role } from '../types';
-import { ROLES_ORDER } from '../constants';
+import { ROLES_ORDER, RoleImagesActive } from '../constants';
 
 interface PlayerListProps {
   players: Player[];
@@ -102,7 +102,7 @@ export const PlayerList: React.FC<PlayerListProps> = ({ players, onRemove, onTog
          </div>
       </div>
 
-      <div className={`grid gap-3 ${gridClasses}`}>
+      <div className={`grid gap-3 gap-y-5 ${gridClasses}`}>
         {filteredPlayers.map(player => {
           const ws = player.stats.currentStreak || 0;
           const isMvp = player.isLastMatchMvp;
@@ -143,6 +143,19 @@ export const PlayerList: React.FC<PlayerListProps> = ({ players, onRemove, onTog
 
           return (
             <div key={player.id} className={`relative group h-full transition-all duration-300 min-h-[90px] ${glowColor}`}>
+              
+              {/* DISCORD NAME BADGE - Placed ABOVE the card border */}
+              {player.discordName && (
+                  <div className="absolute -top-[14px] left-0 z-20 flex items-center gap-1.5 px-2 py-0.5 bg-[#5865F2] clip-corner-sm text-white skew-x-[-12deg] origin-bottom-left shadow-[0_-2px_10px_rgba(88,101,242,0.4)]">
+                      <div className="skew-x-[12deg] flex items-center gap-1">
+                          <svg className="w-2.5 h-2.5" viewBox="0 0 127 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path d="M107.701 8.04901C107.701 8.04901 98.7997 0.941655 88.5997 0C88.1997 0.541667 87.2997 2.04902 86.2997 3.34902C75.2997 1.84902 64.3997 1.84902 53.6997 3.34902C52.6997 2.04902 51.7997 0.541667 51.3997 0C41.1997 0.941655 32.2997 8.04901 32.2997 8.04901C13.8997 35.549 14.3997 62.449 16.8997 88.949C28.2997 97.449 43.0997 102.449 57.8997 102.449C61.3997 97.749 64.3997 92.749 66.8997 87.449C61.6997 85.449 56.7997 82.949 52.1997 80.049C53.4997 79.149 54.6997 78.149 55.7997 77.149C82.3997 89.449 111.4 89.449 137.6 77.149C138.8 78.249 140 79.249 141.3 80.049C136.7 82.949 131.8 85.449 126.6 87.449C129.1 92.749 132.1 97.749 135.6 102.449C150.4 102.449 165.2 97.449 176.6 88.949C179.3 61.249 174.5 35.549 156.1 8.04901C156.1 8.04901 147.2 0.941655 137 0C136.6 0.541667 135.7 2.04902 134.7 3.34902C124 1.84902 113.1 1.84902 102.1 3.34902C101.1 2.04902 100.2 0.541667 99.8003 0C89.6003 0.941655 80.7003 8.04901 80.7003 8.04901ZM64.0997 68.349C56.2997 68.349 49.8997 61.249 49.8997 52.549C49.8997 43.849 56.0997 36.749 64.0997 36.749C72.0997 36.749 78.4997 43.849 78.2997 52.549C78.2997 61.249 72.0997 68.349 64.0997 68.349ZM124.3 68.349C116.5 68.349 110.1 61.249 110.1 52.549C110.1 43.849 116.3 36.749 124.3 36.749C132.3 36.749 138.7 43.849 138.5 52.549C138.5 61.249 132.3 68.349 124.3 68.349Z" fill="white" transform="scale(0.65)"/>
+                          </svg>
+                          <span className="font-bold text-[8px] font-orbitron tracking-wider">{player.discordName}</span>
+                      </div>
+                  </div>
+              )}
+
               {/* Animated Border Background */}
               <div className="absolute inset-0 clip-corner-sm overflow-hidden z-0 bg-[#1e3a5f]/20">
                  {animationLayer}
@@ -173,7 +186,15 @@ export const PlayerList: React.FC<PlayerListProps> = ({ players, onRemove, onTog
                       ) : player.isAllRoles ? (
                         <span className="text-[7px] border border-purple-500 text-purple-400 px-1 py-0.5 rounded uppercase">All Roles</span>
                       ) : (
-                        player.roles.map(r => <span key={r} className={`text-[7px] border px-1 py-0.5 rounded uppercase ${getRoleBadgeStyle(r)}`}>{r.split(' ')[0]}</span>)
+                        player.roles.map(r => {
+                            const icon = RoleImagesActive[r];
+                            return (
+                                <span key={r} className={`text-[7px] border px-1 py-0.5 rounded uppercase flex items-center gap-1 ${getRoleBadgeStyle(r)}`}>
+                                    {icon && <img src={icon} className="w-3 h-3 object-contain" alt="" />}
+                                    {r.split(' ')[0]}
+                                </span>
+                            );
+                        })
                       )}
                     </div>
                   </div>
