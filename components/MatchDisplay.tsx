@@ -295,9 +295,16 @@ export const MatchDisplay: React.FC<MatchDisplayProps> = ({
                 </div>
              )}
 
-             <span className="block text-xl md:text-3xl font-bold text-white truncate font-orbitron drop-shadow-md w-full">
-                {player?.name}
-             </span>
+             <div className={`flex items-center gap-2 w-full ${team === 'crimson' ? 'flex-row-reverse' : 'flex-row'}`}>
+                 <span className={`block text-xl md:text-3xl font-bold truncate font-orbitron drop-shadow-md ${player?.isCaptain ? 'text-[#fbbf24]' : 'text-white'}`}>
+                    {player?.name}
+                 </span>
+                 {player?.isCaptain && (
+                     <span className="px-1.5 py-0.5 text-[8px] font-black uppercase tracking-tighter bg-[#fbbf24] text-black clip-corner-sm shadow-[0_0_8px_rgba(251,191,36,0.6)] shrink-0">
+                        CAPTAIN
+                     </span>
+                 )}
+             </div>
              <div className={`absolute inset-0 bg-gradient-to-r ${theme.gradient} opacity-50 pointer-events-none`}></div>
            </div>
            

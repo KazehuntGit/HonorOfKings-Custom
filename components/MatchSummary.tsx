@@ -50,8 +50,13 @@ export const MatchSummary: React.FC<MatchSummaryProps> = ({ match, onReset }) =>
                            <div className="shrink-0 flex items-center justify-center w-32 h-10 bg-[#05090f] border border-cyan-500/30 rounded text-cyan-500">
                               {RoleIcons[role]}
                            </div>
-                           <div className="min-w-0 flex-1">
-                              <div className="text-lg md:text-xl font-orbitron text-white truncate font-bold">{player?.name}</div>
+                           <div className="min-w-0 flex-1 flex items-center gap-2">
+                              <div className={`text-lg md:text-xl font-orbitron truncate font-bold ${player?.isCaptain ? 'text-[#fbbf24]' : 'text-white'}`}>{player?.name}</div>
+                              {player?.isCaptain && (
+                                  <span className="px-1.5 py-0.5 text-[8px] font-black uppercase tracking-tighter bg-[#fbbf24] text-black clip-corner-sm shadow-[0_0_8px_rgba(251,191,36,0.6)] shrink-0">
+                                     CAPTAIN
+                                  </span>
+                              )}
                            </div>
                         </div>
                       );
@@ -85,8 +90,13 @@ export const MatchSummary: React.FC<MatchSummaryProps> = ({ match, onReset }) =>
                            <div className="shrink-0 flex items-center justify-center w-32 h-10 bg-[#05090f] border border-red-500/30 rounded text-red-500">
                               {RoleIcons[role]}
                            </div>
-                           <div className="min-w-0 flex-1">
-                              <div className="text-lg md:text-xl font-orbitron text-white truncate font-bold">{player?.name}</div>
+                           <div className="min-w-0 flex-1 flex flex-row-reverse items-center gap-2">
+                              <div className={`text-lg md:text-xl font-orbitron truncate font-bold ${player?.isCaptain ? 'text-[#fbbf24]' : 'text-white'}`}>{player?.name}</div>
+                              {player?.isCaptain && (
+                                  <span className="px-1.5 py-0.5 text-[8px] font-black uppercase tracking-tighter bg-[#fbbf24] text-black clip-corner-sm shadow-[0_0_8px_rgba(251,191,36,0.6)] shrink-0">
+                                     CAPTAIN
+                                  </span>
+                              )}
                            </div>
                         </div>
                       );

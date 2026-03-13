@@ -115,6 +115,7 @@ interface BatchItem {
   roles: Role[];
   isAllRoles: boolean;
   action: 'add' | 'bench';
+  isCaptain?: boolean;
 }
 
 interface PlayerFormProps {
@@ -127,6 +128,7 @@ export const PlayerForm: React.FC<PlayerFormProps> = ({ onBatchProcess, isCoachM
   const [name, setName] = useState('');
   const [isAllRoles, setIsAllRoles] = useState(false);
   const [selectedRoles, setSelectedRoles] = useState<Role[]>([]);
+  const [isCaptain, setIsCaptain] = useState(false);
   const [smartInput, setSmartInput] = useState('');
 
   const toggleRole = (role: Role) => {
@@ -144,8 +146,8 @@ export const PlayerForm: React.FC<PlayerFormProps> = ({ onBatchProcess, isCoachM
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || (!isAllRoles && selectedRoles.length === 0)) return;
-    onBatchProcess([{ name: name.trim(), isAllRoles, roles: isAllRoles ? [] : selectedRoles, action: 'add' }]);
-    setName(''); setIsAllRoles(false); setSelectedRoles([]);
+    onBatchProcess([{ name: name.trim(), isAllRoles, roles: isAllRoles ? [] : selectedRoles, action: 'add', isCaptain }]);
+    setName(''); setIsAllRoles(false); setSelectedRoles([]); setIsCaptain(false);
   };
 
   const handleQuickFill = () => {
@@ -238,6 +240,7 @@ export const PlayerForm: React.FC<PlayerFormProps> = ({ onBatchProcess, isCoachM
       if (!pName) return;
 
       let pIsAllRoles = false;
+      let pIsCaptain = false;
       const pRoles: Role[] = [];
       let pAction: 'add' | 'bench' = 'add';
 
@@ -245,6 +248,7 @@ export const PlayerForm: React.FC<PlayerFormProps> = ({ onBatchProcess, isCoachM
       if (pRoleStr.includes('bench') || pRoleStr.includes('stop') || pRoleStr.includes('out') || pRoleStr.includes('afk')) {
          pAction = 'bench';
       } else {
+         if (/captain|capt|cpt/i.test(pRoleStr)) pIsCaptain = true;
          if (pRoleStr.includes('all') || pRoleStr.includes('fill') || pRoleStr.includes('any') || pRoleStr.includes('auto')) {
             pIsAllRoles = true;
          } else {
@@ -257,13 +261,14 @@ export const PlayerForm: React.FC<PlayerFormProps> = ({ onBatchProcess, isCoachM
          }
       }
       
-      if (pName && (pAction === 'bench' || pIsAllRoles || pRoles.length > 0)) {
+      if (pName && (pAction === 'bench' || pIsAllRoles || pRoles.length > 0 || pIsCaptain)) {
         batchItems.push({ 
             name: pName, 
             discordName: currentDiscordName || undefined, // Attach the captured discord name
             isAllRoles: pIsAllRoles, 
             roles: pRoles, 
-            action: pAction 
+            action: pAction,
+            isCaptain: pIsCaptain
         });
         // We do NOT clear currentDiscordName here to allow multiple entries under one name.
       }
@@ -285,9 +290,10 @@ Zei
 ZeiGoodman:Jungler/farm lane
 
 Moon — 2/5/2026 7:30
-Zorogentry : mid, mm
+Zorogentry : mid, mm : captain
 
 --- OTHER FORMATS ---
+PlayerName : All Role : Captain
 PlayerName - Role1, Role2
 Player (All Roles)
 Player: Bench`;
@@ -313,6 +319,25 @@ Player: Bench`;
               <label className="block text-[10px] uppercase tracking-widest text-[#8a9db8] mb-2 font-bold">Player Name</label>
               <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="ENTER IGN..." className="w-full bg-[#05090f] border border-[#1e3a5f] p-4 text-[#f0f4f8] focus:outline-none focus:border-[#dcb06b] clip-corner-sm font-orbitron"/>
             </div>
+            
+            <div className="mb-6 flex items-center justify-between">
+              <label className="text-[10px] uppercase tracking-widest text-[#8a9db8] font-bold">Captain Status</label>
+              <label className="flex items-center cursor-pointer group/toggle">
+                <span className={`mr-3 text-xs font-bold transition-colors uppercase ${isCaptain ? 'text-purple-400' : 'text-[#4a5f78]'}`}>
+                  {isCaptain ? 'Captain' : 'Normal'}
+                </span>
+                <div className={`w-10 h-5 rounded-full relative transition-colors ${isCaptain ? 'bg-purple-500' : 'bg-[#1e3a5f]'}`}>
+                   <div className={`absolute top-1 w-3 h-3 rounded-full bg-white shadow-sm transition-transform duration-300 ${isCaptain ? 'left-6' : 'left-1'}`}></div>
+                </div>
+                <input 
+                  type="checkbox" 
+                  className="hidden"
+                  checked={isCaptain}
+                  onChange={e => setIsCaptain(e.target.checked)}
+                />
+              </label>
+            </div>
+
             <div className="mb-8">
               <div className="flex justify-between items-end mb-4">
                  <label className="text-[10px] uppercase tracking-widest text-[#8a9db8] font-bold">Role Preference</label>

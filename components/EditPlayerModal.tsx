@@ -14,6 +14,7 @@ export const EditPlayerModal: React.FC<EditPlayerModalProps> = ({ player, isOpen
   const [name, setName] = useState(player.name);
   const [isAllRoles, setIsAllRoles] = useState(player.isAllRoles);
   const [selectedRoles, setSelectedRoles] = useState<Role[]>(player.roles);
+  const [isCaptain, setIsCaptain] = useState(player.isCaptain || false);
 
   // Sync state when player prop changes or modal opens
   useEffect(() => {
@@ -21,6 +22,7 @@ export const EditPlayerModal: React.FC<EditPlayerModalProps> = ({ player, isOpen
       setName(player.name);
       setIsAllRoles(player.isAllRoles);
       setSelectedRoles(player.roles);
+      setIsCaptain(player.isCaptain || false);
     }
   }, [player, isOpen]);
 
@@ -50,7 +52,8 @@ export const EditPlayerModal: React.FC<EditPlayerModalProps> = ({ player, isOpen
       ...player,
       name,
       isAllRoles,
-      roles: isAllRoles ? [] : selectedRoles
+      roles: isAllRoles ? [] : selectedRoles,
+      isCaptain
     });
     onClose();
   };
@@ -90,6 +93,24 @@ export const EditPlayerModal: React.FC<EditPlayerModalProps> = ({ player, isOpen
                 />
                 <div className="absolute right-0 bottom-0 h-2 w-2 border-b border-r border-[#dcb06b] pointer-events-none"></div>
               </div>
+            </div>
+
+            <div className="mb-6 flex items-center justify-between">
+              <label className="text-[10px] uppercase tracking-[0.2em] text-[#8a9db8] font-bold">Captain Status</label>
+              <label className="flex items-center cursor-pointer group/toggle">
+                <span className={`mr-3 text-xs font-bold transition-colors uppercase ${isCaptain ? 'text-purple-400' : 'text-[#4a5f78]'}`}>
+                  {isCaptain ? 'Captain' : 'Normal'}
+                </span>
+                <div className={`w-10 h-5 rounded-full relative transition-colors ${isCaptain ? 'bg-purple-500' : 'bg-[#1e3a5f]'}`}>
+                   <div className={`absolute top-1 w-3 h-3 rounded-full bg-white shadow-sm transition-transform duration-300 ${isCaptain ? 'left-6' : 'left-1'}`}></div>
+                </div>
+                <input 
+                  type="checkbox" 
+                  className="hidden"
+                  checked={isCaptain}
+                  onChange={e => setIsCaptain(e.target.checked)}
+                />
+              </label>
             </div>
 
             <div className="mb-8">

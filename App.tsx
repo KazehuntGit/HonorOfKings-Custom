@@ -156,6 +156,7 @@ export default function App() {
         roles: p.roles,
         isAllRoles: p.isAllRoles,
         isActive: p.isActive,
+        isCaptain: p.isCaptain,
         stats: p.stats
       }));
       const hash = btoa(JSON.stringify(compactData));
@@ -221,7 +222,7 @@ export default function App() {
       }, 1500);
   };
 
-  const handleBatchProcess = (batchData: { name: string; discordName?: string; roles: Role[]; isAllRoles: boolean; action?: 'add' | 'bench' }[]) => {
+  const handleBatchProcess = (batchData: { name: string; discordName?: string; roles: Role[]; isAllRoles: boolean; action?: 'add' | 'bench'; isCaptain?: boolean }[]) => {
     setPlayers(prev => {
       let updatedPlayers = [...prev];
       batchData.forEach(item => {
@@ -236,7 +237,8 @@ export default function App() {
                   roles: item.roles, 
                   isAllRoles: item.isAllRoles, 
                   isActive: true,
-                  discordName: item.discordName || updatedPlayers[existingIndex].discordName // Update discord name if provided
+                  discordName: item.discordName || updatedPlayers[existingIndex].discordName, // Update discord name if provided
+                  isCaptain: item.isCaptain !== undefined ? item.isCaptain : updatedPlayers[existingIndex].isCaptain
               };
            } else {
               updatedPlayers.push({
@@ -246,6 +248,7 @@ export default function App() {
                  roles: item.roles,
                  isAllRoles: item.isAllRoles,
                  isActive: true,
+                 isCaptain: item.isCaptain || false,
                  isLastMatchMvp: false,
                  stats: { matchesPlayed: 0, wins: 0, currentStreak: 0, maxStreak: 0 }
               });
@@ -269,6 +272,7 @@ export default function App() {
 
   const removePlayer = (id: string) => setPlayers(prev => prev.filter(p => p.id !== id));
   const togglePlayerActive = (id: string) => setPlayers(prev => prev.map(p => p.id === id ? { ...p, isActive: !p.isActive } : p));
+  const togglePlayerCaptain = (id: string) => setPlayers(prev => prev.map(p => p.id === id ? { ...p, isCaptain: !p.isCaptain } : p));
   const handleEditPlayer = (player: Player) => { setEditingPlayer(player); setIsEditModalOpen(true); };
   
   const handleUpdatePlayer = (updatedPlayer: Player) => {
@@ -488,16 +492,20 @@ export default function App() {
                           </div>
                         )}
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {!isBracketMode && (
-                            <button onClick={() => setIsCoachMode(!isCoachMode)} className="relative w-full group overflow-hidden p-[3px] clip-corner-sm transition-all duration-300 transform hover:scale-[1.01] active:scale-[0.98]">
-                              {isCoachMode && <div className="absolute inset-[-100%] transition-opacity duration-700"><div className="absolute inset-0 bg-[conic-gradient(from_0deg,transparent_0deg,#dcb06b_60deg,#f3dcb1_120deg,transparent_180deg,#dcb06b_240deg,#f3dcb1_300deg,transparent_360deg)] animate-[spin_3s_linear_infinite]"></div></div>}
-                              <div className={`relative z-10 py-4 px-6 flex items-center justify-center transition-all duration-300 clip-corner-sm border h-full ${isCoachMode ? 'bg-black text-[#dcb06b] border-transparent shadow-[inset_0_0_20px_rgba(220,176,107,0.5)]' : 'bg-[#0a1a2f]/80 border-[#1e3a5f] text-[#4a5f78]'}`}><span className={`font-cinzel font-black text-xs tracking-[0.3em] uppercase transition-all duration-500 ${isCoachMode ? 'text-white drop-shadow-[0_0_10px_#dcb06b]' : ''}`}>COACH MODE {isCoachMode ? 'ON' : 'OFF'}</span></div>
-                            </button>
-                          )}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <button onClick={() => !isBracketMode && setIsCoachMode(!isCoachMode)} className={`relative w-full group overflow-hidden p-[3px] clip-corner-sm transition-all duration-300 transform ${isBracketMode ? 'opacity-60 cursor-not-allowed' : 'hover:scale-[1.01] active:scale-[0.98]'}`}>
+                            {isCoachMode && <div className="absolute inset-[-100%] transition-opacity duration-700"><div className="absolute inset-0 bg-[conic-gradient(from_0deg,transparent_0deg,#dcb06b_60deg,#f3dcb1_120deg,transparent_180deg,#dcb06b_240deg,#f3dcb1_300deg,transparent_360deg)] animate-[spin_3s_linear_infinite]"></div></div>}
+                            <div className={`relative z-10 py-4 px-6 flex items-center justify-center transition-all duration-300 clip-corner-sm border h-full ${isCoachMode ? 'bg-black text-[#dcb06b] border-transparent shadow-[inset_0_0_20px_rgba(220,176,107,0.5)]' : 'bg-[#0a1a2f]/80 border-[#1e3a5f] text-[#4a5f78]'}`}><span className={`font-cinzel font-black text-xs tracking-[0.3em] uppercase transition-all duration-500 ${isCoachMode ? 'text-white drop-shadow-[0_0_10px_#dcb06b]' : ''}`}>COACH MODE {isCoachMode ? 'ON' : 'OFF'}</span></div>
+                          </button>
                           <button onClick={() => { setIsBracketMode(!isBracketMode); if(!isBracketMode) setIsCoachMode(false); }} className="relative w-full group overflow-hidden p-[3px] clip-corner-sm transition-all duration-300 transform hover:scale-[1.01] active:scale-[0.98]">
                             {isBracketMode && <div className="absolute inset-[-100%] transition-opacity duration-700"><div className="absolute inset-0 bg-[conic-gradient(from_0deg,transparent_0deg,#ffffff_60deg,#e2e8f0_120deg,transparent_180deg,#ffffff_240deg,#e2e8f0_300deg,transparent_360deg)] animate-[spin_3s_linear_infinite]"></div></div>}
                             <div className={`relative z-10 py-4 px-6 flex items-center justify-center transition-all duration-300 clip-corner-sm border h-full ${isBracketMode ? 'bg-black text-white border-transparent shadow-[inset_0_0_20px_rgba(255,255,255,0.4)]' : 'bg-[#0a1a2f]/80 border-[#1e3a5f] text-[#4a5f78]'}`}><span className={`font-cinzel font-black text-xs tracking-[0.3em] uppercase transition-all duration-500 ${isBracketMode ? 'text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.8)]' : ''}`}>BRACKET MODE {isBracketMode ? 'ON' : 'OFF'}</span></div>
+                          </button>
+                          <button onClick={() => {}} className="relative w-full group overflow-hidden p-[3px] clip-corner-sm transition-all duration-300 transform opacity-60 cursor-not-allowed">
+                            <div className="relative z-10 py-4 px-6 flex flex-col items-center justify-center transition-all duration-300 clip-corner-sm border h-full bg-[#0a1a2f]/80 border-[#1e3a5f] text-[#4a5f78]">
+                              <span className="font-cinzel font-black text-xs tracking-[0.3em] uppercase">1v1 (BETA)</span>
+                              <span className="text-[8px] font-orbitron mt-1 text-[#dcb06b] tracking-widest">COMING SOON</span>
+                            </div>
                           </button>
                         </div>
 
@@ -545,6 +553,17 @@ export default function App() {
                                     )}
                                 </div>
                             </div>
+                            
+                            <div className="mb-6 p-4 bg-purple-900/20 border border-purple-500/30 clip-corner-sm">
+                                <h4 className="text-purple-400 font-cinzel text-xs font-bold mb-2 tracking-widest flex items-center gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                    CAPTAIN FEATURE
+                                </h4>
+                                <p className="text-[10px] text-purple-200/70 font-orbitron leading-relaxed">
+                                    If a player is marked as <span className="text-purple-400 font-bold">CAPTAIN</span>, they will be prioritized to be selected in the match. The system will ensure that a captain is not placed on the same team with other captains whenever possible.
+                                </p>
+                            </div>
+
                             {errorMsg && <div className="mb-4 p-3 border-l-2 border-red-500 bg-red-900/20 text-red-200 text-xs animate-pulse">{errorMsg}</div>}
                           </div>
                         </div>
@@ -669,7 +688,7 @@ export default function App() {
                     </div>
                  </div>
                  <div className="tech-border p-6 bg-[#0a1a2f]/40 min-h-[400px]">
-                    <PlayerList players={players} onRemove={removePlayer} onToggleActive={togglePlayerActive} onEdit={handleEditPlayer} isSidebarOpen={false} />
+                    <PlayerList players={players} onRemove={removePlayer} onToggleActive={togglePlayerActive} onToggleCaptain={togglePlayerCaptain} onEdit={handleEditPlayer} isSidebarOpen={false} />
                  </div>
                  <div className="mt-12 tech-border p-6 bg-[#0a1a2f]/40">
                     <h2 className="text-2xl font-cinzel font-black text-[#dcb06b] mb-6">BATTLE HISTORY</h2>

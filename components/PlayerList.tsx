@@ -8,13 +8,14 @@ interface PlayerListProps {
   players: Player[];
   onRemove: (id: string) => void;
   onToggleActive: (id: string) => void;
+  onToggleCaptain?: (id: string) => void;
   onEdit: (player: Player) => void;
   isSidebarOpen?: boolean;
 }
 
 type FilterType = 'ALL' | 'ACTIVE' | 'BENCH' | Role;
 
-export const PlayerList: React.FC<PlayerListProps> = ({ players, onRemove, onToggleActive, onEdit, isSidebarOpen = true }) => {
+export const PlayerList: React.FC<PlayerListProps> = ({ players, onRemove, onToggleActive, onToggleCaptain, onEdit, isSidebarOpen = true }) => {
   const [filter, setFilter] = useState<FilterType>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
@@ -177,7 +178,12 @@ export const PlayerList: React.FC<PlayerListProps> = ({ players, onRemove, onTog
                 <div className="flex justify-between items-start mb-2 relative z-10">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1">
-                      <div className={`text-lg font-bold font-orbitron truncate ${isMvp ? 'text-yellow-400' : 'text-white'}`}>{player.name}</div>
+                      <div className={`text-lg font-bold font-orbitron truncate ${isMvp || player.isCaptain ? 'text-[#fbbf24]' : 'text-white'}`}>{player.name}</div>
+                      {player.isCaptain && (
+                          <span className="px-1.5 py-0.5 text-[8px] font-black uppercase tracking-tighter bg-[#fbbf24] text-black clip-corner-sm shadow-[0_0_8px_rgba(251,191,36,0.6)] shrink-0">
+                             CAPTAIN
+                          </span>
+                      )}
                       {player.isActive && renderRatingArrows(player.lastMatchRating || 0)}
                     </div>
                     <div className="flex flex-wrap gap-1 mt-1">
@@ -206,6 +212,13 @@ export const PlayerList: React.FC<PlayerListProps> = ({ players, onRemove, onTog
                     </button>
 
                     <div className="flex flex-col gap-1 items-end">
+                       {/* Captain Mini-Tag */}
+                       {player.isCaptain && player.isActive && (
+                         <div className="px-2 py-0.5 text-[8px] font-black uppercase tracking-tighter bg-purple-500 text-white clip-corner-sm shadow-[0_0_8px_rgba(168,85,247,0.6)]">
+                            CAPTAIN
+                         </div>
+                       )}
+
                        {/* MVP Mini-Tag */}
                        {isMvp && player.isActive && (
                          <div className="px-2 py-0.5 text-[8px] font-black uppercase tracking-tighter bg-[#fbbf24] text-black clip-corner-sm shadow-[0_0_8px_rgba(251,191,36,0.6)]">
@@ -235,7 +248,7 @@ export const PlayerList: React.FC<PlayerListProps> = ({ players, onRemove, onTog
           );
         })}
       </div>
-      {menuOpenId && createPortal(<div className="fixed z-[9999] w-32 bg-[#05090f] border border-[#dcb06b] clip-corner-sm flex flex-col shadow-2xl" style={{ top: menuPosition.top, left: menuPosition.left }} onClick={e => e.stopPropagation()}><button onClick={() => { onToggleActive(menuOpenId); }} className="px-3 py-3 text-left text-[10px] uppercase font-bold text-white hover:bg-[#dcb06b] hover:text-black transition-colors">Toggle Active</button><button onClick={() => { onEdit(players.find(p => p.id === menuOpenId)!); }} className="px-3 py-3 text-left text-[10px] uppercase font-bold text-white hover:bg-[#dcb06b] hover:text-black transition-colors">Edit</button><button onClick={() => { onRemove(menuOpenId); }} className="px-3 py-3 text-left text-[10px] uppercase font-bold text-red-500 hover:bg-red-500 hover:text-white transition-colors">Remove</button></div>, document.body)}
+      {menuOpenId && createPortal(<div className="fixed z-[9999] w-32 bg-[#05090f] border border-[#dcb06b] clip-corner-sm flex flex-col shadow-2xl" style={{ top: menuPosition.top, left: menuPosition.left }} onClick={e => e.stopPropagation()}><button onClick={() => { onToggleActive(menuOpenId); }} className="px-3 py-3 text-left text-[10px] uppercase font-bold text-white hover:bg-[#dcb06b] hover:text-black transition-colors">Toggle Active</button>{onToggleCaptain && <button onClick={() => { onToggleCaptain(menuOpenId); }} className="px-3 py-3 text-left text-[10px] uppercase font-bold text-white hover:bg-[#dcb06b] hover:text-black transition-colors">Toggle Captain</button>}<button onClick={() => { onEdit(players.find(p => p.id === menuOpenId)!); }} className="px-3 py-3 text-left text-[10px] uppercase font-bold text-white hover:bg-[#dcb06b] hover:text-black transition-colors">Edit</button><button onClick={() => { onRemove(menuOpenId); }} className="px-3 py-3 text-left text-[10px] uppercase font-bold text-red-500 hover:bg-red-500 hover:text-white transition-colors">Remove</button></div>, document.body)}
     </div>
   );
 };

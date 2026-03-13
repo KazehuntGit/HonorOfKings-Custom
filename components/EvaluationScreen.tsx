@@ -115,7 +115,14 @@ export const EvaluationScreen: React.FC<EvaluationScreenProps> = ({ match, winne
                             <div key={role} onDragOver={!isCoach ? handleDragOver : undefined} onDrop={!isCoach ? (e) => handleDrop(e, slot.player.id) : undefined} className={`flex items-center justify-between bg-black/40 p-4 rounded-md border-2 h-20 relative transition-all duration-300 ${isMvp ? 'border-yellow-400 shadow-[0_0_25px_rgba(251,191,36,0.3)] scale-[1.02] z-10' : 'border-white/5 hover:border-white/10'}`}>
                                 <div className="flex items-center gap-4 min-w-0 flex-1">
                                     <div className={`shrink-0 scale-[0.85] ${teamColor === 'cyan' ? 'text-cyan-400' : 'text-red-500'}`}>{RoleIcons[role]}</div>
-                                    <div className={`text-lg font-orbitron truncate font-bold tracking-wider ${isMvp ? 'text-[#dcb06b]' : 'text-white'}`}>{slot.player.name}</div>
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <div className={`text-lg font-orbitron truncate font-bold tracking-wider ${isMvp || slot.player.isCaptain ? 'text-[#fbbf24]' : 'text-white'}`}>{slot.player.name}</div>
+                                        {slot.player.isCaptain && (
+                                            <span className="px-1.5 py-0.5 text-[8px] font-black uppercase tracking-tighter bg-[#fbbf24] text-black clip-corner-sm shadow-[0_0_8px_rgba(251,191,36,0.6)] shrink-0">
+                                                CAPTAIN
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                                 {!isCoach && (
                                 <div className="flex items-center gap-4 shrink-0">

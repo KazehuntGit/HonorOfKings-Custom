@@ -106,12 +106,20 @@ export const generateMatch = (players: Player[], roomId: string, isCoachMode: bo
   for (const role of allRoles) {
       let capable = players.filter(p => canPlay(p, role));
       capable = shuffle(capable);
-      capable.sort((a, b) => getPlayerVersatility(a) - getPlayerVersatility(b));
+      capable.sort((a, b) => {
+          if (a.isCaptain && !b.isCaptain) return -1;
+          if (!a.isCaptain && b.isCaptain) return 1;
+          return getPlayerVersatility(a) - getPlayerVersatility(b);
+      });
       playersByRole[role] = capable;
   }
 
   const assignments = new Map<number, Player>();
   const usedPlayerIds = new Set<string>();
+  
+  const activeCaptains = players.filter(p => p.isCaptain);
+  const maxCaptainsPerTeam = activeCaptains.length > 0 ? Math.ceil(activeCaptains.length / 2) : 0;
+  const teamCaptainsCount = { azure: 0, crimson: 0 };
   
   let operations = 0;
   const MAX_OPS = 500000;
@@ -127,9 +135,18 @@ export const generateMatch = (players: Player[], roomId: string, isCoachMode: bo
 
     for (const player of candidates) {
       if (!usedPlayerIds.has(player.id)) {
+          if (player.isCaptain) {
+              if (currentSlot.team === 'azure' && teamCaptainsCount.azure >= maxCaptainsPerTeam) continue;
+              if (currentSlot.team === 'crimson' && teamCaptainsCount.crimson >= maxCaptainsPerTeam) continue;
+          }
+
           assignments.set(slotIndex, player);
           usedPlayerIds.add(player.id);
+          if (player.isCaptain) teamCaptainsCount[currentSlot.team]++;
+
           if (solve(slotIndex + 1)) return true;
+
+          if (player.isCaptain) teamCaptainsCount[currentSlot.team]--;
           assignments.delete(slotIndex);
           usedPlayerIds.delete(player.id);
       }
@@ -208,6 +225,9 @@ export const generateBracketMatch = (players: Player[], roomId: string, numTeams
   const MAX_ATTEMPTS = 50; 
   const OPS_LIMIT_PER_ATTEMPT = 50000;
 
+  const activeCaptains = players.filter(p => p.isCaptain);
+  const maxCaptainsPerTeam = activeCaptains.length > 0 ? Math.ceil(activeCaptains.length / numTeams) : 0;
+
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       
       // Shuffle players deeply to change candidate order
@@ -220,6 +240,8 @@ export const generateBracketMatch = (players: Player[], roomId: string, numTeams
           // Heuristic: Use least versatile players first
           // Add random noise to handle players with equal versatility differently each attempt
           capable.sort((a, b) => {
+             if (a.isCaptain && !b.isCaptain) return -1;
+             if (!a.isCaptain && b.isCaptain) return 1;
              const vA = getPlayerVersatility(a);
              const vB = getPlayerVersatility(b);
              if (vA === vB) return Math.random() - 0.5;
@@ -238,6 +260,10 @@ export const generateBracketMatch = (players: Player[], roomId: string, numTeams
 
       const assignments = new Map<number, Player>();
       const usedIds = new Set<string>();
+      
+      const teamCaptainsCount: Record<number, number> = {};
+      for (let i = 0; i < numTeams; i++) teamCaptainsCount[i] = 0;
+
       let operations = 0;
 
       const solve = (idx: number): boolean => {
@@ -247,17 +273,21 @@ export const generateBracketMatch = (players: Player[], roomId: string, numTeams
 
           if (idx >= slotsToFill.length) return true;
           
-          const { role } = slotsToFill[idx];
+          const { teamIdx, role } = slotsToFill[idx];
           const candidates = playersByRole[role] || [];
 
           for (const p of candidates) {
               if (!usedIds.has(p.id)) {
+                  if (p.isCaptain && teamCaptainsCount[teamIdx] >= maxCaptainsPerTeam) continue;
+
                   assignments.set(idx, p);
                   usedIds.add(p.id);
+                  if (p.isCaptain) teamCaptainsCount[teamIdx]++;
                   
                   if (solve(idx + 1)) return true;
                   
                   // Backtrack
+                  if (p.isCaptain) teamCaptainsCount[teamIdx]--;
                   usedIds.delete(p.id);
                   assignments.delete(idx);
               }

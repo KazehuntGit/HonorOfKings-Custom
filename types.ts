@@ -22,6 +22,7 @@ export interface Player {
   roles: Role[]; 
   isAllRoles: boolean;
   isActive: boolean; // Menandakan apakah pemain ikut match kali ini
+  isCaptain?: boolean; // Menandakan apakah pemain adalah kapten
   isLastMatchMvp?: boolean; // Tracks if player was MVP in the specific last match
   lastMatchRating?: number; // New: Performa evaluasi terakhir (-2 s/d 2)
   stats: PlayerStats;
