@@ -294,7 +294,7 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
   // LOTTERY LOGIC
   useEffect(() => {
       if (phase === 'MATCHUP_LOTTERY') {
-          const matchesToReveal = hasRoundOne ? roundOneMatches : quarterMatches;
+          const matchesToReveal = allMatches.filter(m => m.teamA && m.teamB);
           if (lotteryRevealedCount <= matchesToReveal.length) {
               const timer = setTimeout(() => {
                   setLotteryRevealedCount(prev => prev + 1);
@@ -302,7 +302,7 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
               return () => clearTimeout(timer);
           }
       }
-  }, [phase, lotteryRevealedCount, hasRoundOne, roundOneMatches, quarterMatches]);
+  }, [phase, lotteryRevealedCount, allMatches]);
 
   const activeMatchData = useMemo(() => {
     const data = allMatches.find(m => m.id === currentMatchIdx);
@@ -521,7 +521,7 @@ export const BracketDisplay: React.FC<BracketDisplayProps> = ({ match, onReset, 
   };
 
   const renderMatchupLottery = () => {
-      const matchesToDisplay = hasRoundOne ? roundOneMatches : quarterMatches;
+      const matchesToDisplay = allMatches.filter(m => m.teamA && m.teamB);
       const isComplete = lotteryRevealedCount > matchesToDisplay.length;
 
       return (

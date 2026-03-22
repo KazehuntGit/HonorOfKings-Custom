@@ -4,7 +4,10 @@ import { Button } from './Button';
 export const BroadcastManager: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [mode, setMode] = useState<'menu' | 'youtube' | 'mirror' | 'cropping' | 'active'>('menu');
+  const [activeSource, setActiveSource] = useState<'screen' | 'youtube' | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [youtubeUrl, setYoutubeUrl] = useState('');
+  const [youtubeVideoId, setYoutubeVideoId] = useState('');
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -41,22 +44,47 @@ export const BroadcastManager: React.FC = () => {
 
       // Handle stream stop from browser UI
       mediaStream.getVideoTracks()[0].onended = () => {
-        stopScreenShare();
+        stopBroadcast();
       };
     } catch (err) {
       console.error("Error sharing screen:", err);
     }
   };
 
-  const stopScreenShare = () => {
+  const startYoutubeMirror = () => {
+    let videoId = '';
+    const match = youtubeUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|live\/))([^"&?\/\s]{11})/);
+    if (match) {
+      videoId = match[1];
+    }
+
+    if (videoId) {
+      setYoutubeVideoId(videoId);
+      setActiveSource('youtube');
+      setMode('active');
+      setIsOpen(false);
+      setIsMinimized(false);
+      setIsFullscreen(false);
+    } else {
+      alert("Invalid YouTube URL. Please provide a valid YouTube video or livestream link.");
+    }
+  };
+
+  const stopBroadcast = () => {
     if (stream) {
       stream.getTracks().forEach(track => track.stop());
     }
     setStream(null);
+    setYoutubeUrl('');
+    setYoutubeVideoId('');
+    setActiveSource(null);
+    setCrop({ x: 0, y: 0, w: 1, h: 1 });
     setMode('menu');
     setIsOpen(false);
     setIsMinimized(false);
     setIsFullscreen(false);
+    setPosition({ x: 20, y: 20 });
+    setWindowSize({ width: 400 });
   };
 
   const toggleFullscreen = () => {
@@ -70,14 +98,14 @@ export const BroadcastManager: React.FC = () => {
   };
 
   useEffect(() => {
-    if (videoRef.current && stream && (mode === 'cropping' || mode === 'active')) {
+    if (videoRef.current && stream && (mode === 'cropping' || (mode === 'active' && activeSource === 'screen'))) {
       videoRef.current.srcObject = stream;
       videoRef.current.play().catch(e => console.error("Play error:", e));
     }
-  }, [stream, mode]);
+  }, [stream, mode, activeSource]);
 
   useEffect(() => {
-    if (mode !== 'active' || !stream || isMinimized) return;
+    if (mode !== 'active' || activeSource !== 'screen' || !stream || isMinimized) return;
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -144,7 +172,7 @@ export const BroadcastManager: React.FC = () => {
     return () => {
       cancelAnimationFrame(animationFrameId);
     };
-  }, [mode, stream, crop, windowSize, isMinimized, isFullscreen]);
+  }, [mode, stream, crop, windowSize, isMinimized, isFullscreen, activeSource]);
 
   // Window Dragging Logic
   useEffect(() => {
@@ -249,8 +277,8 @@ export const BroadcastManager: React.FC = () => {
                       <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
                     </svg>
                   </div>
-                  <h3 className="text-white font-orbitron font-bold text-lg mb-2">Live on YouTube</h3>
-                  <p className="text-[#8a9db8] text-sm font-inter">Instructions for streaming your tournament directly to YouTube using external broadcast software.</p>
+                  <h3 className="text-white font-orbitron font-bold text-lg mb-2">Embed YouTube Stream</h3>
+                  <p className="text-[#8a9db8] text-sm font-inter">Paste a YouTube Livestream or Video link to mirror it directly inside the app.</p>
                 </div>
 
                 <div 
@@ -270,15 +298,19 @@ export const BroadcastManager: React.FC = () => {
 
             {mode === 'youtube' && (
               <div className="animate-fade-in">
-                <h3 className="text-xl text-white font-orbitron mb-4">How to Stream to YouTube</h3>
-                <div className="bg-black/50 p-4 border border-[#1e3a5f] text-[#8a9db8] font-inter space-y-3 mb-6 text-sm">
-                  <p><strong className="text-[#ef4444]">1.</strong> Download and install <a href="https://obsproject.com/" target="_blank" rel="noreferrer" className="text-[#00d2ff] hover:underline">OBS Studio</a>.</p>
-                  <p><strong className="text-[#ef4444]">2.</strong> In OBS, add a new Source: <strong>Window Capture</strong> and select your browser running this app.</p>
-                  <p><strong className="text-[#ef4444]">3.</strong> Go to YouTube Studio, click <strong>Create {'>'} Go live</strong>, and copy your Stream Key.</p>
-                  <p><strong className="text-[#ef4444]">4.</strong> In OBS Settings {'>'} Stream, select YouTube and paste your Stream Key.</p>
-                  <p><strong className="text-[#ef4444]">5.</strong> Click <strong>Start Streaming</strong> in OBS!</p>
+                <h3 className="text-xl text-white font-orbitron mb-4">Embed YouTube Stream</h3>
+                <p className="text-[#8a9db8] mb-4 text-sm font-inter">Paste your YouTube Livestream or Video link below to mirror it directly inside the app.</p>
+                <input 
+                  type="text" 
+                  value={youtubeUrl}
+                  onChange={e => setYoutubeUrl(e.target.value)}
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  className="w-full bg-[#05090f] border border-[#1e3a5f] p-3 text-[#f0f4f8] focus:outline-none focus:border-[#ef4444] transition-all clip-corner-sm font-orbitron tracking-wide mb-6"
+                />
+                <div className="flex gap-4 w-full justify-end">
+                  <Button onClick={() => setMode('menu')} variant="secondary">BACK</Button>
+                  <Button onClick={startYoutubeMirror} disabled={!youtubeUrl.trim()}>MIRROR YOUTUBE</Button>
                 </div>
-                <Button onClick={() => setMode('menu')} variant="secondary">BACK</Button>
               </div>
             )}
 
@@ -328,8 +360,8 @@ export const BroadcastManager: React.FC = () => {
                 </div>
 
                 <div className="flex gap-4 mt-6 w-full justify-center">
-                  <Button onClick={stopScreenShare} variant="secondary">CANCEL</Button>
-                  <Button onClick={() => { setMode('active'); setIsOpen(false); }}>APPLY & MIRROR</Button>
+                  <Button onClick={stopBroadcast} variant="secondary">CANCEL</Button>
+                  <Button onClick={() => { setActiveSource('screen'); setMode('active'); setIsOpen(false); }}>APPLY & MIRROR</Button>
                 </div>
               </div>
             )}
@@ -338,9 +370,9 @@ export const BroadcastManager: React.FC = () => {
       )}
 
       {/* Active Floating Mirror Window */}
-      {mode === 'active' && stream && (
+      {mode === 'active' && (activeSource === 'screen' ? stream : youtubeVideoId) && (
         <div 
-          className={`fixed z-[150] bg-[#05090f] border border-[#00d2ff] shadow-[0_0_30px_rgba(0,210,255,0.2)] flex flex-col overflow-hidden transition-all duration-300 ${
+          className={`fixed z-[150] bg-[#05090f] border ${activeSource === 'youtube' ? 'border-[#ef4444] shadow-[0_0_30px_rgba(239,68,68,0.2)]' : 'border-[#00d2ff] shadow-[0_0_30px_rgba(0,210,255,0.2)]'} flex flex-col overflow-hidden transition-all duration-300 ${
             isFullscreen 
               ? 'inset-0 border-none rounded-none z-[9999] flex items-center justify-center bg-black' 
               : isMinimized
@@ -355,12 +387,14 @@ export const BroadcastManager: React.FC = () => {
         >
           {/* Window Header (Draggable) */}
           <div 
-            className={`bg-[#0a1a2f] border-b border-[#00d2ff]/30 p-2 flex justify-between items-center select-none ${isFullscreen ? 'absolute top-0 left-0 right-0 z-10 opacity-0 hover:opacity-100 transition-opacity' : 'cursor-move'}`}
+            className={`bg-[#0a1a2f] border-b ${activeSource === 'youtube' ? 'border-[#ef4444]/30' : 'border-[#00d2ff]/30'} p-2 flex justify-between items-center select-none ${isFullscreen ? 'absolute top-0 left-0 right-0 z-10 opacity-0 hover:opacity-100 transition-opacity' : 'cursor-move'}`}
             onMouseDown={handleWindowDragStart}
           >
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-              <span className="text-[#00d2ff] font-orbitron text-[10px] font-bold tracking-widest">LIVE MIRROR</span>
+              <span className={`${activeSource === 'youtube' ? 'text-[#ef4444]' : 'text-[#00d2ff]'} font-orbitron text-[10px] font-bold tracking-widest`}>
+                {activeSource === 'youtube' ? 'YOUTUBE LIVE' : 'LIVE MIRROR'}
+              </span>
             </div>
             <div className="flex items-center gap-2">
               {!isFullscreen && (
@@ -390,7 +424,7 @@ export const BroadcastManager: React.FC = () => {
                 </button>
               )}
               <button 
-                onClick={stopScreenShare}
+                onClick={stopBroadcast}
                 className="text-[#ef4444] hover:text-white transition-colors ml-1"
                 title="Stop Mirroring"
               >
@@ -401,44 +435,57 @@ export const BroadcastManager: React.FC = () => {
             </div>
           </div>
 
-          {/* Canvas Container */}
-          {!isMinimized && (
-            <div className={`relative w-full bg-black group ${isFullscreen ? 'flex items-center justify-center h-full' : ''}`}>
+          {/* Content Container */}
+          <div className={`relative w-full bg-black group ${isFullscreen ? 'flex items-center justify-center h-full' : ''} ${isMinimized ? 'hidden' : 'block'}`}>
+            {activeSource === 'screen' ? (
               <canvas ref={canvasRef} className="block" style={{ maxWidth: '100%', maxHeight: '100%' }} />
-              
-              {/* Resize Handle */}
-              {!isFullscreen && (
-                <div 
-                  className="absolute bottom-0 right-0 w-6 h-6 cursor-se-resize opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-end p-1"
-                  onMouseDown={(e) => {
-                    e.stopPropagation();
-                    const startX = e.clientX;
-                    const startWidth = windowSize.width;
-                    
-                    const handleResizeMove = (moveEvent: MouseEvent) => {
-                      const newWidth = Math.max(200, Math.min(startWidth + (moveEvent.clientX - startX), window.innerWidth - position.x - 20));
-                      setWindowSize({ width: newWidth });
-                    };
-                    
-                    const handleResizeUp = () => {
-                      window.removeEventListener('mousemove', handleResizeMove);
-                      window.removeEventListener('mouseup', handleResizeUp);
-                    };
-                    
-                    window.addEventListener('mousemove', handleResizeMove);
-                    window.addEventListener('mouseup', handleResizeUp);
-                  }}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-[#00d2ff]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                  </svg>
-                </div>
-              )}
-            </div>
-          )}
+            ) : (
+              <div className="w-full" style={{ aspectRatio: '16/9', maxHeight: isFullscreen ? '100vh' : 'auto' }}>
+                <iframe 
+                  width="100%" 
+                  height="100%" 
+                  src={`https://www.youtube.com/embed/${youtubeVideoId}?autoplay=1`} 
+                  title="YouTube video player" 
+                  frameBorder="0" 
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                  allowFullScreen
+                  className="pointer-events-auto"
+                ></iframe>
+              </div>
+            )}
+            
+            {/* Resize Handle */}
+            {!isFullscreen && (
+              <div 
+                className="absolute bottom-0 right-0 w-6 h-6 cursor-se-resize opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-end p-1"
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  const startX = e.clientX;
+                  const startWidth = windowSize.width;
+                  
+                  const handleResizeMove = (moveEvent: MouseEvent) => {
+                    const newWidth = Math.max(200, Math.min(startWidth + (moveEvent.clientX - startX), window.innerWidth - position.x - 20));
+                    setWindowSize({ width: newWidth });
+                  };
+                  
+                  const handleResizeUp = () => {
+                    window.removeEventListener('mousemove', handleResizeMove);
+                    window.removeEventListener('mouseup', handleResizeUp);
+                  };
+                  
+                  window.addEventListener('mousemove', handleResizeMove);
+                  window.addEventListener('mouseup', handleResizeUp);
+                }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ${activeSource === 'youtube' ? 'text-[#ef4444]' : 'text-[#00d2ff]'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                </svg>
+              </div>
+            )}
+          </div>
           
           {/* Hidden video element required for canvas drawing */}
-          <video ref={videoRef} className="hidden" muted playsInline />
+          {activeSource === 'screen' && <video ref={videoRef} className="hidden" muted playsInline />}
         </div>
       )}
     </>
