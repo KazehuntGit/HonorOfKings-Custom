@@ -19,13 +19,25 @@ export const BroadcastManager: React.FC = () => {
   const [isDraggingWindow, setIsDraggingWindow] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [windowSize, setWindowSize] = useState({ width: 400 });
+  const [isMinimized, setIsMinimized] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const startScreenShare = async () => {
     try {
-      const mediaStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      // Request high resolution and frame rate
+      const mediaStream = await navigator.mediaDevices.getDisplayMedia({ 
+        video: {
+          width: { ideal: 1920, max: 3840 },
+          height: { ideal: 1080, max: 2160 },
+          frameRate: { ideal: 60, max: 60 }
+        }, 
+        audio: false 
+      });
       setStream(mediaStream);
       setMode('cropping');
       setCrop({ x: 0, y: 0, w: 1, h: 1 }); // Reset crop
+      setIsMinimized(false);
+      setIsFullscreen(false);
 
       // Handle stream stop from browser UI
       mediaStream.getVideoTracks()[0].onended = () => {
@@ -43,6 +55,18 @@ export const BroadcastManager: React.FC = () => {
     setStream(null);
     setMode('menu');
     setIsOpen(false);
+    setIsMinimized(false);
+    setIsFullscreen(false);
+  };
+
+  const toggleFullscreen = () => {
+    setIsFullscreen(!isFullscreen);
+    setIsMinimized(false);
+  };
+
+  const toggleMinimize = () => {
+    setIsMinimized(!isMinimized);
+    if (isFullscreen) setIsFullscreen(false);
   };
 
   useEffect(() => {
@@ -53,7 +77,7 @@ export const BroadcastManager: React.FC = () => {
   }, [stream, mode]);
 
   useEffect(() => {
-    if (mode !== 'active' || !stream) return;
+    if (mode !== 'active' || !stream || isMinimized) return;
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -63,7 +87,7 @@ export const BroadcastManager: React.FC = () => {
 
     const draw = () => {
       if (video.paused || video.ended) return;
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext('2d', { alpha: false }); // Optimize canvas context
       if (!ctx) return;
 
       const sx = crop.x * video.videoWidth;
@@ -73,10 +97,43 @@ export const BroadcastManager: React.FC = () => {
 
       if (sWidth === 0 || sHeight === 0) return;
 
-      if (canvas.width !== sWidth) canvas.width = sWidth;
-      if (canvas.height !== sHeight) canvas.height = sHeight;
+      // Use device pixel ratio for sharper rendering
+      const dpr = window.devicePixelRatio || 1;
+      
+      // Calculate display size based on fullscreen or window size
+      let displayWidth, displayHeight;
+      
+      if (isFullscreen) {
+        // Calculate aspect ratio preserving dimensions for fullscreen
+        const screenRatio = window.innerWidth / window.innerHeight;
+        const cropRatio = sWidth / sHeight;
+        
+        if (screenRatio > cropRatio) {
+          displayHeight = window.innerHeight;
+          displayWidth = displayHeight * cropRatio;
+        } else {
+          displayWidth = window.innerWidth;
+          displayHeight = displayWidth / cropRatio;
+        }
+      } else {
+        displayWidth = windowSize.width;
+        displayHeight = displayWidth * (sHeight / sWidth);
+      }
 
-      ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, sWidth, sHeight);
+      // Set internal canvas resolution higher for sharpness
+      if (canvas.width !== displayWidth * dpr) canvas.width = displayWidth * dpr;
+      if (canvas.height !== displayHeight * dpr) canvas.height = displayHeight * dpr;
+      
+      // Set CSS display size
+      canvas.style.width = `${displayWidth}px`;
+      canvas.style.height = `${displayHeight}px`;
+
+      // Enable image smoothing for better quality
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+
+      // Draw with DPR scaling
+      ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, displayWidth * dpr, displayHeight * dpr);
       animationFrameId = requestAnimationFrame(draw);
     };
 
@@ -87,12 +144,12 @@ export const BroadcastManager: React.FC = () => {
     return () => {
       cancelAnimationFrame(animationFrameId);
     };
-  }, [mode, stream, crop]);
+  }, [mode, stream, crop, windowSize, isMinimized, isFullscreen]);
 
   // Window Dragging Logic
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (isDraggingWindow) {
+      if (isDraggingWindow && !isFullscreen) {
         setPosition({
           x: e.clientX - dragOffset.x,
           y: e.clientY - dragOffset.y
@@ -109,9 +166,10 @@ export const BroadcastManager: React.FC = () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDraggingWindow, dragOffset]);
+  }, [isDraggingWindow, dragOffset, isFullscreen]);
 
   const handleWindowDragStart = (e: React.MouseEvent) => {
+    if (isFullscreen) return;
     setIsDraggingWindow(true);
     setDragOffset({
       x: e.clientX - position.x,
@@ -282,64 +340,102 @@ export const BroadcastManager: React.FC = () => {
       {/* Active Floating Mirror Window */}
       {mode === 'active' && stream && (
         <div 
-          className="fixed z-[150] bg-[#05090f] border border-[#00d2ff] shadow-[0_0_30px_rgba(0,210,255,0.2)] clip-corner-sm flex flex-col overflow-hidden"
-          style={{ 
+          className={`fixed z-[150] bg-[#05090f] border border-[#00d2ff] shadow-[0_0_30px_rgba(0,210,255,0.2)] flex flex-col overflow-hidden transition-all duration-300 ${
+            isFullscreen 
+              ? 'inset-0 border-none rounded-none z-[9999] flex items-center justify-center bg-black' 
+              : isMinimized
+                ? 'clip-corner-sm'
+                : 'clip-corner-sm'
+          }`}
+          style={!isFullscreen ? { 
             left: position.x, 
             top: position.y,
-            width: windowSize.width,
-          }}
+            width: isMinimized ? '200px' : windowSize.width,
+          } : {}}
         >
           {/* Window Header (Draggable) */}
           <div 
-            className="bg-[#0a1a2f] border-b border-[#00d2ff]/30 p-2 flex justify-between items-center cursor-move select-none"
+            className={`bg-[#0a1a2f] border-b border-[#00d2ff]/30 p-2 flex justify-between items-center select-none ${isFullscreen ? 'absolute top-0 left-0 right-0 z-10 opacity-0 hover:opacity-100 transition-opacity' : 'cursor-move'}`}
             onMouseDown={handleWindowDragStart}
           >
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
               <span className="text-[#00d2ff] font-orbitron text-[10px] font-bold tracking-widest">LIVE MIRROR</span>
             </div>
-            <button 
-              onClick={stopScreenShare}
-              className="text-[#ef4444] hover:text-white transition-colors"
-              title="Stop Mirroring"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+            <div className="flex items-center gap-2">
+              {!isFullscreen && (
+                <button 
+                  onClick={toggleMinimize}
+                  className="text-[#8a9db8] hover:text-white transition-colors"
+                  title={isMinimized ? "Expand" : "Minimize"}
+                >
+                  {isMinimized ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" /></svg>
+                  )}
+                </button>
+              )}
+              {!isMinimized && (
+                <button 
+                  onClick={toggleFullscreen}
+                  className="text-[#8a9db8] hover:text-white transition-colors"
+                  title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+                >
+                  {isFullscreen ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9L4 4m0 0l5-5M4 4h5M15 15l5 5m0 0l-5 5m5-5h-5" /></svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
+                  )}
+                </button>
+              )}
+              <button 
+                onClick={stopScreenShare}
+                className="text-[#ef4444] hover:text-white transition-colors ml-1"
+                title="Stop Mirroring"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           {/* Canvas Container */}
-          <div className="relative w-full bg-black group">
-            <canvas ref={canvasRef} className="w-full h-auto block" />
-            
-            {/* Resize Handle */}
-            <div 
-              className="absolute bottom-0 right-0 w-6 h-6 cursor-se-resize opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-end p-1"
-              onMouseDown={(e) => {
-                e.stopPropagation();
-                const startX = e.clientX;
-                const startWidth = windowSize.width;
-                
-                const handleResizeMove = (moveEvent: MouseEvent) => {
-                  const newWidth = Math.max(200, Math.min(startWidth + (moveEvent.clientX - startX), window.innerWidth - position.x - 20));
-                  setWindowSize({ width: newWidth });
-                };
-                
-                const handleResizeUp = () => {
-                  window.removeEventListener('mousemove', handleResizeMove);
-                  window.removeEventListener('mouseup', handleResizeUp);
-                };
-                
-                window.addEventListener('mousemove', handleResizeMove);
-                window.addEventListener('mouseup', handleResizeUp);
-              }}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-[#00d2ff]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-              </svg>
+          {!isMinimized && (
+            <div className={`relative w-full bg-black group ${isFullscreen ? 'flex items-center justify-center h-full' : ''}`}>
+              <canvas ref={canvasRef} className="block" style={{ maxWidth: '100%', maxHeight: '100%' }} />
+              
+              {/* Resize Handle */}
+              {!isFullscreen && (
+                <div 
+                  className="absolute bottom-0 right-0 w-6 h-6 cursor-se-resize opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-end p-1"
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    const startX = e.clientX;
+                    const startWidth = windowSize.width;
+                    
+                    const handleResizeMove = (moveEvent: MouseEvent) => {
+                      const newWidth = Math.max(200, Math.min(startWidth + (moveEvent.clientX - startX), window.innerWidth - position.x - 20));
+                      setWindowSize({ width: newWidth });
+                    };
+                    
+                    const handleResizeUp = () => {
+                      window.removeEventListener('mousemove', handleResizeMove);
+                      window.removeEventListener('mouseup', handleResizeUp);
+                    };
+                    
+                    window.addEventListener('mousemove', handleResizeMove);
+                    window.addEventListener('mouseup', handleResizeUp);
+                  }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-[#00d2ff]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                  </svg>
+                </div>
+              )}
             </div>
-          </div>
+          )}
           
           {/* Hidden video element required for canvas drawing */}
           <video ref={videoRef} className="hidden" muted playsInline />
