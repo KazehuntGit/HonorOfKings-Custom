@@ -124,7 +124,7 @@ export const SpinWheel: React.FC<SpinWheelProps> = ({ candidates, winnerName, on
             <div 
               ref={reelRef} 
               className="w-full flex flex-col items-center will-change-transform" 
-              style={{ transform: `translateY(${scrollPosition}px)`, filter: 'none', transition: status === 'scrolling' ? `transform ${duration}ms cubic-bezier(0.15, 0, 0.01, 1)` : 'none' }}
+              style={{ transform: `translateY(${scrollPosition}px)`, filter: 'none', transition: status === 'scrolling' ? `transform ${duration}ms cubic-bezier(0.1, 0.7, 0.1, 1)` : 'none' }}
             >
                {reelItems.map((name, index) => (
                   <div key={index} className={`flex items-center justify-center w-full font-orbitron font-bold uppercase tracking-widest transition-all duration-300 ${(index === winnerIndex && status === 'completed') ? 'text-[#dcb06b] text-3xl md:text-4xl drop-shadow-[0_0_20px_#dcb06b] scale-110' : 'text-[#f0f4f8] text-xl md:text-2xl opacity-20'}`} style={{ height: `${ITEM_HEIGHT}px` }}>

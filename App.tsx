@@ -5,6 +5,7 @@ import { PlayerForm } from './components/PlayerForm';
 import { PlayerList } from './components/PlayerList';
 import { MatchDisplay } from './components/MatchDisplay';
 import { EditPlayerModal } from './components/EditPlayerModal';
+import { AttendanceModal } from './components/AttendanceModal';
 import { HistoryList } from './components/HistoryList';
 import { generateMatch, generateBracketMatch, validateBracketPool } from './utils/matchmaker';
 import { Button } from './components/Button';
@@ -14,6 +15,8 @@ import { ConfirmModal } from './components/ConfirmModal';
 import { BracketDisplay } from './components/BracketDisplay';
 import { PreparingModal } from './components/PreparingModal';
 import { CookieConsent } from './components/CookieConsent';
+import { LuckySpinModal } from './components/LuckySpinModal';
+import { BroadcastManager } from './components/BroadcastManager';
 import { setCookie, getCookie, eraseCookie } from './utils/cookies';
 
 type ViewMode = 'lobby' | 'match' | 'battle' | 'bracket';
@@ -80,6 +83,8 @@ export default function App() {
   const [setupStep, setSetupStep] = useState<1 | 2 | 3>(1); // 1: Config, 2: Roster, 3: Launch
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isAttendanceModalOpen, setIsAttendanceModalOpen] = useState(false);
+  const [isLuckySpinOpen, setIsLuckySpinOpen] = useState(false);
 
   const [isPreparing, setIsPreparing] = useState(false);
   const [prepMessage, setPrepMessage] = useState("");
@@ -282,8 +287,8 @@ export default function App() {
           if (!prev) return null;
           return {
              ...prev,
-             azureTeam: prev.azureTeam.map(slot => slot.player.id === updatedPlayer.id ? { ...slot, player: { ...slot.player, name: updatedPlayer.name } } : slot),
-             crimsonTeam: prev.crimsonTeam.map(slot => slot.player.id === updatedPlayer.id ? { ...slot, player: { ...slot.player, name: updatedPlayer.name } } : slot)
+             azureTeam: prev.azureTeam.map(slot => slot.player.id === updatedPlayer.id ? { ...slot, player: updatedPlayer } : slot),
+             crimsonTeam: prev.crimsonTeam.map(slot => slot.player.id === updatedPlayer.id ? { ...slot, player: updatedPlayer } : slot)
           };
        });
     }
@@ -294,7 +299,7 @@ export default function App() {
              ...prev,
              teams: prev.teams.map(team => ({
                  ...team,
-                 slots: team.slots.map(slot => slot.player.id === updatedPlayer.id ? { ...slot, player: { ...slot.player, name: updatedPlayer.name } } : slot)
+                 slots: team.slots.map(slot => slot.player.id === updatedPlayer.id ? { ...slot, player: updatedPlayer } : slot)
              }))
           };
        });
@@ -370,6 +375,14 @@ export default function App() {
         return `${name} : ${roles}`;
     });
     navigator.clipboard.writeText(lines.join('\n')).then(() => alert("Roster saved to clipboard!"));
+  };
+
+  const handleAttendanceProcess = (presentNames: string[]) => {
+    setPlayers(prev => prev.map(p => {
+      const discordNameMatch = p.discordName && presentNames.includes(p.discordName.toLowerCase());
+      return { ...p, isActive: Boolean(discordNameMatch) };
+    }));
+    setIsAttendanceModalOpen(false);
   };
 
   const handleClearAll = () => {
@@ -591,7 +604,8 @@ export default function App() {
   return (
     <div className="min-h-screen text-slate-200 font-inter overflow-x-hidden relative flex flex-col">
       <BackgroundParticles />
-      <LocalClock />
+      <LocalClock onOpenLuckySpin={() => setIsLuckySpinOpen(true)} />
+      <LuckySpinModal isOpen={isLuckySpinOpen} onClose={() => setIsLuckySpinOpen(false)} players={activePlayers} />
       
       <div className="fixed top-24 right-4 z-[3000] flex flex-col gap-2 pointer-events-none">
           {toasts.map(toast => (
@@ -627,6 +641,7 @@ export default function App() {
       </div>
       
       {editingPlayer && <EditPlayerModal player={editingPlayer} isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} onSave={handleUpdatePlayer} />}
+      <AttendanceModal isOpen={isAttendanceModalOpen} onClose={() => setIsAttendanceModalOpen(false)} onProcess={handleAttendanceProcess} players={players} />
 
       {viewMode === 'lobby' && (
         <>
@@ -678,12 +693,13 @@ export default function App() {
             <div className="w-full">
                  <div className="flex flex-col md:flex-row items-center justify-between mb-6 gap-4">
                     <button onClick={() => setIsSetupOpen(true)} className="group relative px-8 py-3 bg-[#0a1a2f] border border-[#dcb06b] clip-corner-sm text-[#dcb06b] font-cinzel font-bold tracking-[0.2em] hover:bg-[#dcb06b] hover:text-[#05090f] transition-all shadow-[0_0_15px_rgba(220,176,107,0.2)]">
-                       <span className="flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>OPEN COMMAND CENTER</span>
+                       <span className="flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>COMMAND CENTER</span>
                     </button>
                     <h2 className="text-3xl font-cinzel font-black text-[#dcb06b] tracking-widest hidden md:block">SQUAD ROSTER</h2>
                     <div className="flex gap-3">
                       <button onClick={toggleFullscreen} className="px-6 py-3 border border-[#dcb06b]/30 text-[#dcb06b]/80 hover:text-[#dcb06b] hover:border-[#dcb06b] hover:bg-[#dcb06b]/5 transition-all text-[10px] uppercase font-bold tracking-[0.2em] clip-corner-sm flex items-center justify-center gap-2 group"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>Screen</button>
                       <button onClick={handleExportRoster} className="px-6 py-3 border border-[#dcb06b]/30 text-[#dcb06b]/80 hover:text-[#dcb06b] hover:border-[#dcb06b] hover:bg-[#dcb06b]/5 transition-all text-[10px] uppercase font-bold tracking-[0.2em] clip-corner-sm flex items-center justify-center gap-2 group"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>Save</button>
+                      <button onClick={() => setIsAttendanceModalOpen(true)} className="px-6 py-3 border border-blue-500/30 text-blue-500/80 hover:text-blue-500 hover:border-blue-500 hover:bg-blue-500/5 transition-all text-[10px] uppercase font-bold tracking-[0.2em] clip-corner-sm flex items-center justify-center gap-2 group"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>Attendance</button>
                       <button onClick={handleClearAll} className="px-6 py-3 border border-red-500/30 text-red-500/80 hover:text-red-500 hover:border-red-500 hover:bg-red-500/5 transition-all text-[10px] uppercase font-bold tracking-[0.2em] clip-corner-sm flex items-center justify-center gap-2 group"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>Clear</button>
                     </div>
                  </div>
@@ -738,6 +754,8 @@ export default function App() {
           onUpdatePlayer={handleUpdatePlayer}
         />
       )}
+
+      <BroadcastManager />
 
       <style>{`@keyframes chromatic { 0% { text-shadow: 2px 0 0 #ff0000, -2px 0 0 #0000ff; } 25% { text-shadow: -2px 0 0 #ff0000, 2px 0 0 #0000ff; } 50% { text-shadow: 2px -1px 0 #ff0000, -2px 1px 0 #0000ff; } 75% { text-shadow: -2px 1px 0 #ff0000, 2px -1px 0 #0000ff; } 100% { text-shadow: 2px 0 0 #ff0000, -2px 0 0 #0000ff; } }`}</style>
     </div>

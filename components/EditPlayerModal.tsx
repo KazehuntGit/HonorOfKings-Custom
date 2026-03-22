@@ -12,6 +12,7 @@ interface EditPlayerModalProps {
 
 export const EditPlayerModal: React.FC<EditPlayerModalProps> = ({ player, isOpen, onClose, onSave }) => {
   const [name, setName] = useState(player.name);
+  const [discordName, setDiscordName] = useState(player.discordName || '');
   const [isAllRoles, setIsAllRoles] = useState(player.isAllRoles);
   const [selectedRoles, setSelectedRoles] = useState<Role[]>(player.roles);
   const [isCaptain, setIsCaptain] = useState(player.isCaptain || false);
@@ -20,6 +21,7 @@ export const EditPlayerModal: React.FC<EditPlayerModalProps> = ({ player, isOpen
   useEffect(() => {
     if (isOpen) {
       setName(player.name);
+      setDiscordName(player.discordName || '');
       setIsAllRoles(player.isAllRoles);
       setSelectedRoles(player.roles);
       setIsCaptain(player.isCaptain || false);
@@ -51,6 +53,7 @@ export const EditPlayerModal: React.FC<EditPlayerModalProps> = ({ player, isOpen
     onSave({
       ...player,
       name,
+      discordName: discordName.trim() || undefined,
       isAllRoles,
       roles: isAllRoles ? [] : selectedRoles,
       isCaptain
@@ -82,6 +85,19 @@ export const EditPlayerModal: React.FC<EditPlayerModalProps> = ({ player, isOpen
         {/* Body */}
         <div className="p-6">
           <form onSubmit={handleSave}>
+            <div className="mb-4">
+              <label className="block text-[10px] uppercase tracking-[0.2em] text-[#8a9db8] mb-2 font-bold">Discord Nickname (Optional)</label>
+              <div className="relative">
+                 <input 
+                  type="text" 
+                  value={discordName}
+                  onChange={e => setDiscordName(e.target.value)}
+                  className="w-full bg-[#05090f] border border-[#1e3a5f] p-3 text-[#f0f4f8] focus:outline-none focus:border-[#dcb06b] transition-all clip-corner-sm font-orbitron tracking-wide"
+                />
+                <div className="absolute right-0 bottom-0 h-2 w-2 border-b border-r border-[#dcb06b] pointer-events-none"></div>
+              </div>
+            </div>
+
             <div className="mb-6">
               <label className="block text-[10px] uppercase tracking-[0.2em] text-[#8a9db8] mb-2 font-bold">Player Name</label>
               <div className="relative">

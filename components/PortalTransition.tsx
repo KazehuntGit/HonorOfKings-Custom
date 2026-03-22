@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { TeamSlot, Role } from '../types';
+import { TeamSlot, Role, Player } from '../types';
 import { Button } from './Button';
 import { RoleIcons, ROLES_ORDER } from '../constants';
 
@@ -11,10 +11,12 @@ interface PortalTransitionProps {
   azureTeamName: string;
   crimsonTeamName: string;
   roomId?: string;
+  onUpdatePlayer?: (updatedPlayer: Player) => void;
 }
 
-export const PortalTransition: React.FC<PortalTransitionProps> = ({ onComplete, azureTeam, crimsonTeam, azureTeamName, crimsonTeamName, roomId }) => {
+export const PortalTransition: React.FC<PortalTransitionProps> = ({ onComplete, azureTeam, crimsonTeam, azureTeamName, crimsonTeamName, roomId, onUpdatePlayer }) => {
   const [stage, setStage] = useState(0);
+  const [renameState, setRenameState] = useState<{ isOpen: boolean; player: Player | null; newName: string }>({ isOpen: false, player: null, newName: '' });
   
   useEffect(() => {
     // Animation sequence
@@ -65,7 +67,7 @@ export const PortalTransition: React.FC<PortalTransitionProps> = ({ onComplete, 
                             relative flex flex-col items-center
                             w-full aspect-[3/4]
                             clip-corner-sm backdrop-blur-md
-                            border transition-all duration-500 transform group
+                            border transition-all duration-500 transform group pointer-events-auto
                             ${stage >= 2 ? 'opacity-100 scale-100 translate-y-0' : `opacity-0 scale-75 ${isCyan ? '-translate-y-10' : 'translate-y-10'}`}
                             ${isCyan ? 'bg-[#0a1a2f]/60' : 'bg-[#1a0505]/60'}
                             ${borderClass}
@@ -77,6 +79,20 @@ export const PortalTransition: React.FC<PortalTransitionProps> = ({ onComplete, 
                                 MVP
                             </div>
                         )}
+                        <div className={`absolute top-2 left-2 z-50 flex gap-2 transition-all opacity-0 group-hover:opacity-100`}>
+                            <button 
+                                onClick={(e) => { 
+                                    e.stopPropagation(); 
+                                    if(slot.player) setRenameState({ isOpen: true, player: slot.player, newName: slot.player.name }); 
+                                }} 
+                                className={`p-1.5 bg-black/60 ${isCyan ? 'hover:bg-[#00d2ff]' : 'hover:bg-[#ef4444]'} rounded-full text-white hover:text-black transition-all`} 
+                                title="Change Nickname"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                </svg>
+                            </button>
+                        </div>
                         <div className={`absolute inset-0 bg-gradient-to-b ${isCyan ? 'from-[#00d2ff]/10' : 'from-[#ef4444]/10'} to-transparent opacity-50`}></div>
                         <div className={`w-full h-1 ${isCyan ? 'bg-[#00d2ff]' : 'bg-[#ef4444]'} opacity-70`}></div>
                         <div className="flex-1 flex flex-col items-center justify-center p-2 w-full relative z-10">
@@ -132,6 +148,41 @@ export const PortalTransition: React.FC<PortalTransitionProps> = ({ onComplete, 
         <div className={`absolute inset-0 bg-white pointer-events-none z-[60] mix-blend-overlay ${stage === 2 ? 'animate-[impact-flash_0.3s_ease-out_forwards]' : 'opacity-0'}`}></div>
         
         {/* --- ROOM ID DISPLAY (TOP RIGHT) --- */}
+        {/* --- RENAME MODAL --- */}
+        {renameState.isOpen && renameState.player && (
+            <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+                <div className="bg-[#0a1a2f] border border-[#dcb06b] p-6 clip-corner-md w-full max-w-sm relative shadow-[0_0_30px_rgba(220,176,107,0.2)]">
+                    <h3 className="text-[#dcb06b] font-orbitron font-black text-xl mb-4 tracking-widest">RENAME PLAYER</h3>
+                    <input 
+                        type="text" 
+                        value={renameState.newName}
+                        onChange={(e) => setRenameState(prev => ({ ...prev, newName: e.target.value }))}
+                        className="w-full bg-black/50 border border-[#1e3a5f] text-white p-3 font-orbitron focus:outline-none focus:border-[#dcb06b] transition-colors mb-6"
+                        autoFocus
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && renameState.newName.trim()) {
+                                if (onUpdatePlayer) {
+                                    onUpdatePlayer({ ...renameState.player!, name: renameState.newName.trim() });
+                                }
+                                setRenameState({ isOpen: false, player: null, newName: '' });
+                            } else if (e.key === 'Escape') {
+                                setRenameState({ isOpen: false, player: null, newName: '' });
+                            }
+                        }}
+                    />
+                    <div className="flex justify-end gap-3">
+                        <Button variant="secondary" onClick={() => setRenameState({ isOpen: false, player: null, newName: '' })}>CANCEL</Button>
+                        <Button onClick={() => {
+                            if (renameState.newName.trim() && onUpdatePlayer) {
+                                onUpdatePlayer({ ...renameState.player!, name: renameState.newName.trim() });
+                            }
+                            setRenameState({ isOpen: false, player: null, newName: '' });
+                        }}>SAVE</Button>
+                    </div>
+                </div>
+            </div>
+        )}
+
         <div className={`
              absolute top-6 right-8 z-[80] flex flex-col items-end gap-1 scale-[0.85] origin-top-right animate-slide-in
              transition-opacity duration-700

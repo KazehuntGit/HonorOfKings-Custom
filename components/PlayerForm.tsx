@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Player, Role } from '../types';
 import { Button } from './Button';
 import { ROLES_ORDER, RoleImagesNormal, RoleImagesActive } from '../constants';
+import { ConfirmModal } from './ConfirmModal';
 
 const HOK_HEROES = [
   // CLASH LANE
@@ -126,10 +127,12 @@ interface PlayerFormProps {
 export const PlayerForm: React.FC<PlayerFormProps> = ({ onBatchProcess, isCoachMode }) => {
   const [mode, setMode] = useState<'manual' | 'smart'>('manual');
   const [name, setName] = useState('');
+  const [discordName, setDiscordName] = useState('');
   const [isAllRoles, setIsAllRoles] = useState(false);
   const [selectedRoles, setSelectedRoles] = useState<Role[]>([]);
   const [isCaptain, setIsCaptain] = useState(false);
   const [smartInput, setSmartInput] = useState('');
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 
   const toggleRole = (role: Role) => {
     if (isAllRoles) return;
@@ -146,11 +149,11 @@ export const PlayerForm: React.FC<PlayerFormProps> = ({ onBatchProcess, isCoachM
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || (!isAllRoles && selectedRoles.length === 0)) return;
-    onBatchProcess([{ name: name.trim(), isAllRoles, roles: isAllRoles ? [] : selectedRoles, action: 'add', isCaptain }]);
-    setName(''); setIsAllRoles(false); setSelectedRoles([]); setIsCaptain(false);
+    onBatchProcess([{ name: name.trim(), discordName: discordName.trim() || undefined, isAllRoles, roles: isAllRoles ? [] : selectedRoles, action: 'add', isCaptain }]);
+    setName(''); setDiscordName(''); setIsAllRoles(false); setSelectedRoles([]); setIsCaptain(false);
   };
 
-  const handleQuickFill = () => {
+  const executeQuickFill = () => {
      const shuffledHeroes = [...HOK_HEROES].sort(() => 0.5 - Math.random());
      const batchData = shuffledHeroes.slice(0, 15).map(hero => ({ name: hero.name, roles: hero.roles, isAllRoles: false, action: 'add' as const }));
      for(let i=0; i<5; i++) batchData.push({ name: `Flex Player ${i+1}`, roles: [], isAllRoles: true, action: 'add' });
@@ -159,6 +162,11 @@ export const PlayerForm: React.FC<PlayerFormProps> = ({ onBatchProcess, isCoachM
         batchData.push({ name: "Coach KPL", roles: [Role.COACH], isAllRoles: false, action: 'add' });
      }
      onBatchProcess(batchData);
+     setIsConfirmOpen(false);
+  };
+
+  const handleQuickFill = () => {
+     setIsConfirmOpen(true);
   };
 
   const parseAndSubmitSmartInput = (e: React.FormEvent) => {
@@ -281,16 +289,16 @@ export const PlayerForm: React.FC<PlayerFormProps> = ({ onBatchProcess, isCoachM
   };
 
   const smartPlaceholder = `--- DISCORD COPY-PASTE SUPPORTED ---
-Flaxus
+Player 1
  — 2/12/2026 1:15
-CraozZ: Mid, Farm
+Player1_IGN: Mid, Farm
 
-Zei
+Player 2
  — 2/12/2026 17:00
-ZeiGoodman:Jungler/farm lane
+Player2_IGN:Jungler/farm lane
 
-Moon — 2/5/2026 7:30
-Zorogentry : mid, mm : captain
+Player 3 — 2/5/2026 7:30
+Player3_IGN : mid, mm : captain
 
 --- OTHER FORMATS ---
 PlayerName : All Role : Captain
@@ -300,6 +308,15 @@ Player: Bench`;
 
   return (
     <div className="relative group">
+      <ConfirmModal 
+        isOpen={isConfirmOpen} 
+        title="AUTO FILL ROSTER" 
+        message="Are you sure you want to auto fill the roster with dummy players? This is usually for testing purposes." 
+        onConfirm={executeQuickFill} 
+        onCancel={() => setIsConfirmOpen(false)} 
+        confirmText="AUTO FILL"
+        cancelText="CANCEL"
+      />
       <div className="absolute -inset-[1px] bg-gradient-to-b from-[#dcb06b]/50 to-transparent clip-corner-md opacity-50"></div>
       <div className="bg-[#0a1a2f]/90 backdrop-blur-md p-6 clip-corner-md relative">
         <div className="flex items-center justify-between mb-6 border-b border-[#dcb06b]/20 pb-4">
@@ -315,6 +332,10 @@ Player: Bench`;
         
         {mode === 'manual' ? (
           <form onSubmit={handleManualSubmit}>
+            <div className="mb-4">
+              <label className="block text-[10px] uppercase tracking-widest text-[#8a9db8] mb-2 font-bold">Discord Nickname (Optional)</label>
+              <input type="text" value={discordName} onChange={e => setDiscordName(e.target.value)} placeholder="ENTER DISCORD NICKNAME..." className="w-full bg-[#05090f] border border-[#1e3a5f] p-4 text-[#f0f4f8] focus:outline-none focus:border-[#dcb06b] clip-corner-sm font-orbitron"/>
+            </div>
             <div className="mb-6">
               <label className="block text-[10px] uppercase tracking-widest text-[#8a9db8] mb-2 font-bold">Player Name</label>
               <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="ENTER IGN..." className="w-full bg-[#05090f] border border-[#1e3a5f] p-4 text-[#f0f4f8] focus:outline-none focus:border-[#dcb06b] clip-corner-sm font-orbitron"/>

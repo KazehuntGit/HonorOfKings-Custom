@@ -1,0 +1,350 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { Button } from './Button';
+
+export const BroadcastManager: React.FC = () => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [mode, setMode] = useState<'menu' | 'youtube' | 'mirror' | 'cropping' | 'active'>('menu');
+  const [stream, setStream] = useState<MediaStream | null>(null);
+
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const [crop, setCrop] = useState({ x: 0, y: 0, w: 1, h: 1 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [startPos, setStartPos] = useState({ x: 0, y: 0 });
+  const [currentPos, setCurrentPos] = useState({ x: 0, y: 0 });
+
+  // Floating window state
+  const [position, setPosition] = useState({ x: 20, y: 80 });
+  const [isDraggingWindow, setIsDraggingWindow] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [windowSize, setWindowSize] = useState({ width: 400 });
+
+  const startScreenShare = async () => {
+    try {
+      const mediaStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      setStream(mediaStream);
+      setMode('cropping');
+      setCrop({ x: 0, y: 0, w: 1, h: 1 }); // Reset crop
+
+      // Handle stream stop from browser UI
+      mediaStream.getVideoTracks()[0].onended = () => {
+        stopScreenShare();
+      };
+    } catch (err) {
+      console.error("Error sharing screen:", err);
+    }
+  };
+
+  const stopScreenShare = () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+    }
+    setStream(null);
+    setMode('menu');
+    setIsOpen(false);
+  };
+
+  useEffect(() => {
+    if (videoRef.current && stream && (mode === 'cropping' || mode === 'active')) {
+      videoRef.current.srcObject = stream;
+      videoRef.current.play().catch(e => console.error("Play error:", e));
+    }
+  }, [stream, mode]);
+
+  useEffect(() => {
+    if (mode !== 'active' || !stream) return;
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) return;
+
+    let animationFrameId: number;
+
+    const draw = () => {
+      if (video.paused || video.ended) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const sx = crop.x * video.videoWidth;
+      const sy = crop.y * video.videoHeight;
+      const sWidth = crop.w * video.videoWidth;
+      const sHeight = crop.h * video.videoHeight;
+
+      if (sWidth === 0 || sHeight === 0) return;
+
+      if (canvas.width !== sWidth) canvas.width = sWidth;
+      if (canvas.height !== sHeight) canvas.height = sHeight;
+
+      ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, sWidth, sHeight);
+      animationFrameId = requestAnimationFrame(draw);
+    };
+
+    video.play().then(() => {
+      draw();
+    }).catch(err => console.error("Video play error:", err));
+
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, [mode, stream, crop]);
+
+  // Window Dragging Logic
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isDraggingWindow) {
+        setPosition({
+          x: e.clientX - dragOffset.x,
+          y: e.clientY - dragOffset.y
+        });
+      }
+    };
+    const handleMouseUp = () => setIsDraggingWindow(false);
+
+    if (isDraggingWindow) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDraggingWindow, dragOffset]);
+
+  const handleWindowDragStart = (e: React.MouseEvent) => {
+    setIsDraggingWindow(true);
+    setDragOffset({
+      x: e.clientX - position.x,
+      y: e.clientY - position.y
+    });
+  };
+
+  // Cropping Drag Logic
+  const handleCropMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    setStartPos({ x, y });
+    setCurrentPos({ x, y });
+    setIsDragging(true);
+  };
+
+  const handleCropMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDragging) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+    const y = Math.max(0, Math.min(e.clientY - rect.top, rect.height));
+    setCurrentPos({ x, y });
+  };
+
+  const handleCropMouseUp = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = Math.min(startPos.x, currentPos.x) / rect.width;
+    const y = Math.min(startPos.y, currentPos.y) / rect.height;
+    const w = Math.abs(currentPos.x - startPos.x) / rect.width;
+    const h = Math.abs(currentPos.y - startPos.y) / rect.height;
+
+    if (w > 0.05 && h > 0.05) {
+      setCrop({ x, y, w, h });
+    } else {
+      setCrop({ x: 0, y: 0, w: 1, h: 1 });
+    }
+  };
+
+  return (
+    <>
+      {/* Floating Button */}
+      {mode !== 'active' && (
+        <div className="fixed bottom-6 left-6 z-[200]">
+          <button 
+            onClick={() => setIsOpen(true)}
+            className="bg-[#0a1a2f]/90 border border-[#00d2ff] text-[#00d2ff] px-4 py-2 clip-corner-sm font-orbitron font-bold shadow-[0_0_15px_rgba(0,210,255,0.3)] hover:bg-[#00d2ff] hover:text-black transition-all flex items-center gap-2 backdrop-blur-sm"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+            BROADCAST
+          </button>
+        </div>
+      )}
+
+      {/* Main Modal */}
+      {isOpen && mode !== 'active' && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-[#0a1a2f] border border-[#dcb06b] p-6 clip-corner-md w-full max-w-2xl relative shadow-[0_0_30px_rgba(220,176,107,0.2)]">
+            <button onClick={() => setIsOpen(false)} className="absolute top-4 right-4 text-[#4a5f78] hover:text-white">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+
+            <h2 className="text-2xl font-cinzel font-black text-[#dcb06b] mb-6 tracking-widest">BROADCAST OPTIONS</h2>
+
+            {mode === 'menu' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div 
+                  onClick={() => setMode('youtube')}
+                  className="border border-[#ef4444]/50 bg-[#1a0505]/50 p-6 clip-corner-sm cursor-pointer hover:bg-[#ef4444]/20 hover:border-[#ef4444] transition-all group"
+                >
+                  <div className="text-[#ef4444] mb-4 group-hover:scale-110 transition-transform origin-left">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                    </svg>
+                  </div>
+                  <h3 className="text-white font-orbitron font-bold text-lg mb-2">Live on YouTube</h3>
+                  <p className="text-[#8a9db8] text-sm font-inter">Instructions for streaming your tournament directly to YouTube using external broadcast software.</p>
+                </div>
+
+                <div 
+                  onClick={startScreenShare}
+                  className="border border-[#00d2ff]/50 bg-[#0a1a2f]/50 p-6 clip-corner-sm cursor-pointer hover:bg-[#00d2ff]/20 hover:border-[#00d2ff] transition-all group"
+                >
+                  <div className="text-[#00d2ff] mb-4 group-hover:scale-110 transition-transform origin-left">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-white font-orbitron font-bold text-lg mb-2">Web Screen Mirror</h3>
+                  <p className="text-[#8a9db8] text-sm font-inter">Capture a specific window or screen and display it directly inside this app (e.g., mirroring your game).</p>
+                </div>
+              </div>
+            )}
+
+            {mode === 'youtube' && (
+              <div className="animate-fade-in">
+                <h3 className="text-xl text-white font-orbitron mb-4">How to Stream to YouTube</h3>
+                <div className="bg-black/50 p-4 border border-[#1e3a5f] text-[#8a9db8] font-inter space-y-3 mb-6 text-sm">
+                  <p><strong className="text-[#ef4444]">1.</strong> Download and install <a href="https://obsproject.com/" target="_blank" rel="noreferrer" className="text-[#00d2ff] hover:underline">OBS Studio</a>.</p>
+                  <p><strong className="text-[#ef4444]">2.</strong> In OBS, add a new Source: <strong>Window Capture</strong> and select your browser running this app.</p>
+                  <p><strong className="text-[#ef4444]">3.</strong> Go to YouTube Studio, click <strong>Create {'>'} Go live</strong>, and copy your Stream Key.</p>
+                  <p><strong className="text-[#ef4444]">4.</strong> In OBS Settings {'>'} Stream, select YouTube and paste your Stream Key.</p>
+                  <p><strong className="text-[#ef4444]">5.</strong> Click <strong>Start Streaming</strong> in OBS!</p>
+                </div>
+                <Button onClick={() => setMode('menu')} variant="secondary">BACK</Button>
+              </div>
+            )}
+
+            {mode === 'cropping' && (
+              <div className="animate-fade-in flex flex-col items-center">
+                <p className="text-[#8a9db8] mb-4 text-sm text-center">Drag a box over the video below to crop the specific area you want to mirror.</p>
+                
+                <div 
+                  className="relative w-full max-w-xl bg-black border border-[#1e3a5f] overflow-hidden cursor-crosshair select-none"
+                  onMouseDown={handleCropMouseDown}
+                  onMouseMove={handleCropMouseMove}
+                  onMouseUp={handleCropMouseUp}
+                  onMouseLeave={handleCropMouseUp}
+                >
+                  <video 
+                    ref={videoRef} 
+                    className="w-full h-auto block pointer-events-none" 
+                    muted 
+                    playsInline 
+                  />
+                  
+                  {/* Dragging Overlay */}
+                  {isDragging && (
+                    <div 
+                      className="absolute border-2 border-[#00d2ff] bg-[#00d2ff]/20 pointer-events-none"
+                      style={{
+                        left: Math.min(startPos.x, currentPos.x),
+                        top: Math.min(startPos.y, currentPos.y),
+                        width: Math.abs(currentPos.x - startPos.x),
+                        height: Math.abs(currentPos.y - startPos.y),
+                      }}
+                    />
+                  )}
+
+                  {/* Existing Crop Overlay */}
+                  {!isDragging && crop.w < 1 && (
+                    <div 
+                      className="absolute border-2 border-[#dcb06b] bg-[#dcb06b]/20 pointer-events-none shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"
+                      style={{
+                        left: `${crop.x * 100}%`,
+                        top: `${crop.y * 100}%`,
+                        width: `${crop.w * 100}%`,
+                        height: `${crop.h * 100}%`,
+                      }}
+                    />
+                  )}
+                </div>
+
+                <div className="flex gap-4 mt-6 w-full justify-center">
+                  <Button onClick={stopScreenShare} variant="secondary">CANCEL</Button>
+                  <Button onClick={() => { setMode('active'); setIsOpen(false); }}>APPLY & MIRROR</Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Active Floating Mirror Window */}
+      {mode === 'active' && stream && (
+        <div 
+          className="fixed z-[150] bg-[#05090f] border border-[#00d2ff] shadow-[0_0_30px_rgba(0,210,255,0.2)] clip-corner-sm flex flex-col overflow-hidden"
+          style={{ 
+            left: position.x, 
+            top: position.y,
+            width: windowSize.width,
+          }}
+        >
+          {/* Window Header (Draggable) */}
+          <div 
+            className="bg-[#0a1a2f] border-b border-[#00d2ff]/30 p-2 flex justify-between items-center cursor-move select-none"
+            onMouseDown={handleWindowDragStart}
+          >
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+              <span className="text-[#00d2ff] font-orbitron text-[10px] font-bold tracking-widest">LIVE MIRROR</span>
+            </div>
+            <button 
+              onClick={stopScreenShare}
+              className="text-[#ef4444] hover:text-white transition-colors"
+              title="Stop Mirroring"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Canvas Container */}
+          <div className="relative w-full bg-black group">
+            <canvas ref={canvasRef} className="w-full h-auto block" />
+            
+            {/* Resize Handle */}
+            <div 
+              className="absolute bottom-0 right-0 w-6 h-6 cursor-se-resize opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-end p-1"
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                const startX = e.clientX;
+                const startWidth = windowSize.width;
+                
+                const handleResizeMove = (moveEvent: MouseEvent) => {
+                  const newWidth = Math.max(200, Math.min(startWidth + (moveEvent.clientX - startX), window.innerWidth - position.x - 20));
+                  setWindowSize({ width: newWidth });
+                };
+                
+                const handleResizeUp = () => {
+                  window.removeEventListener('mousemove', handleResizeMove);
+                  window.removeEventListener('mouseup', handleResizeUp);
+                };
+                
+                window.addEventListener('mousemove', handleResizeMove);
+                window.addEventListener('mouseup', handleResizeUp);
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-[#00d2ff]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+              </svg>
+            </div>
+          </div>
+          
+          {/* Hidden video element required for canvas drawing */}
+          <video ref={videoRef} className="hidden" muted playsInline />
+        </div>
+      )}
+    </>
+  );
+};

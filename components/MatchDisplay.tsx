@@ -44,6 +44,8 @@ export const MatchDisplay: React.FC<MatchDisplayProps> = ({
     message: string;
     onConfirm: () => void;
     isDestructive?: boolean;
+    confirmText?: string;
+    cancelText?: string;
   }>({
     isOpen: false,
     title: '',
@@ -146,15 +148,25 @@ export const MatchDisplay: React.FC<MatchDisplayProps> = ({
 
     const candidateNames = candidates.map(p => p.name);
     if (candidates.length === 1) {
-        const cardId = getCardId(team, role);
-        setAutoFillFlash(cardId);
-        setRevealedCards(prev => new Set(prev).add(cardId));
-        if (team === 'crimson') setCurrentRoleIndex(prev => prev + 1);
-        setTimeout(() => setAutoFillFlash(null), 1000);
+        setConfirmState({
+          isOpen: true,
+          title: "AUTO FILL CONFIRMATION",
+          message: `Only 1 candidate available for ${role}. Do you want to auto fill with ${candidates[0].name}?`,
+          confirmText: "YES",
+          cancelText: "NO",
+          onConfirm: () => {
+            const cardId = getCardId(team, role);
+            setAutoFillFlash(cardId);
+            setRevealedCards(prev => new Set(prev).add(cardId));
+            if (team === 'crimson') setCurrentRoleIndex(prev => prev + 1);
+            setTimeout(() => setAutoFillFlash(null), 1000);
+            setConfirmState(prev => ({ ...prev, isOpen: false }));
+          }
+        });
         return;
     }
     if (!candidateNames.includes(winner.name)) candidateNames.push(winner.name);
-    const randomDuration = Math.floor(Math.random() * (10000 - 5000 + 1)) + 5000;
+    const randomDuration = Math.floor(Math.random() * (9000 - 5000 + 1)) + 5000;
     setWheelState({ isOpen: true, type: 'draft', team, role, winnerName: winner.name, candidates: candidateNames, duration: randomDuration });
   };
 
@@ -171,7 +183,7 @@ export const MatchDisplay: React.FC<MatchDisplayProps> = ({
     const newPlayer = candidates[Math.floor(Math.random() * candidates.length)];
     const candidateNames = candidates.map(p => p.name);
     if (candidates.length === 1) { onReroll(team, role, candidates[0]); return; }
-    const randomDuration = Math.floor(Math.random() * (9000 - 4000 + 1)) + 4000; 
+    const randomDuration = Math.floor(Math.random() * (9000 - 5000 + 1)) + 5000; 
     setWheelState({ isOpen: true, type: 'reroll', team, role, winnerName: newPlayer.name, winnerPlayer: newPlayer, candidates: candidateNames, duration: randomDuration });
   };
 
@@ -232,7 +244,7 @@ export const MatchDisplay: React.FC<MatchDisplayProps> = ({
                 LOBBY
             </Button>
        </div>
-       <PortalTransition azureTeam={match.azureTeam} crimsonTeam={match.crimsonTeam} azureTeamName={match.azureTeamName} crimsonTeamName={match.crimsonTeamName} onComplete={handleTransitionComplete} />
+       <PortalTransition azureTeam={match.azureTeam} crimsonTeam={match.crimsonTeam} azureTeamName={match.azureTeamName} crimsonTeamName={match.crimsonTeamName} onComplete={handleTransitionComplete} onUpdatePlayer={onUpdatePlayer} />
     </>
   );
 
@@ -280,7 +292,7 @@ export const MatchDisplay: React.FC<MatchDisplayProps> = ({
     return (
       <div className={`relative h-16 w-full animate-slide-in perspective-container group ${isAutoFilled ? 'scale-105 z-20' : ''}`}>
         <div className={`absolute inset-0 clip-corner-md border-l-4 tilt-card ${theme.bg} ${theme.border} ${isAutoFilled ? 'shadow-[0_0_30px_#dcb06b] border-[#dcb06b]' : theme.glow} shadow-[0_0_20px_rgba(0,0,0,0.6)] transition-all duration-300`}>
-           <div className={`flex flex-col h-full relative z-10 px-6 py-0 justify-center ${team === 'crimson' ? 'items-end text-right' : 'items-start text-left'}`}>
+             <div className={`flex flex-col h-full relative z-10 px-6 py-0 justify-center ${team === 'crimson' ? 'items-end text-right' : 'items-start text-left'}`}>
              <div className={`mb-1 px-2 py-0.5 rounded-sm bg-black/50 border border-white/10 ${theme.text} scale-[0.8] origin-${team === 'crimson' ? 'right' : 'left'} opacity-90`}>
                 {RoleIcons[role]}
              </div>
@@ -329,7 +341,16 @@ export const MatchDisplay: React.FC<MatchDisplayProps> = ({
 
   return (
     <>
-      <ConfirmModal isOpen={confirmState.isOpen} title={confirmState.title} message={confirmState.message} onConfirm={confirmState.onConfirm} onCancel={() => setConfirmState(prev => ({ ...prev, isOpen: false }))} isDestructive={confirmState.isDestructive} />
+      <ConfirmModal 
+        isOpen={confirmState.isOpen} 
+        title={confirmState.title} 
+        message={confirmState.message} 
+        onConfirm={confirmState.onConfirm} 
+        onCancel={() => setConfirmState(prev => ({ ...prev, isOpen: false }))} 
+        isDestructive={confirmState.isDestructive} 
+        confirmText={confirmState.confirmText}
+        cancelText={confirmState.cancelText}
+      />
       {renameState.isOpen && (<div className="fixed inset-0 z-[1000] flex items-center justify-center p-4"><div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setRenameState({ isOpen: false, player: null, newName: '' })}></div><div className="relative w-full max-w-sm bg-[#0a1a2f] border border-[#dcb06b] clip-corner-md shadow-[0_0_30px_rgba(220,176,107,0.3)] animate-slide-in p-6"><h3 className="text-[#dcb06b] font-cinzel font-bold text-lg mb-4 text-center tracking-widest">CHANGE NICKNAME</h3><input type="text" value={renameState.newName} onChange={e => setRenameState({ ...renameState, newName: e.target.value })} className="w-full bg-black/50 border border-[#1e3a5f] p-3 text-white font-orbitron focus:border-[#dcb06b] outline-none mb-6 text-center" autoFocus /><div className="flex gap-3"><Button variant="secondary" onClick={() => setRenameState({ isOpen: false, player: null, newName: '' })} className="flex-1">CANCEL</Button><Button onClick={submitRename} className="flex-1">CONFIRM</Button></div></div></div>)}
 
       {wheelState && wheelState.isOpen && <SpinWheel candidates={wheelState.candidates} winnerName={wheelState.winnerName} team={wheelState.team} roleName={wheelState.role} roomId={match.roomId} duration={wheelState.duration} onComplete={handleWheelComplete} onCancel={handleWheelCancel} />}

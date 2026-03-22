@@ -1,13 +1,13 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 
-export const LocalClock: React.FC = () => {
+interface LocalClockProps {
+  onOpenLuckySpin?: () => void;
+}
+
+export const LocalClock: React.FC<LocalClockProps> = ({ onOpenLuckySpin }) => {
   const [time, setTime] = useState('');
-  const [isVisible, setIsVisible] = useState(false);
-  const [isMinimized, setIsMinimized] = useState(false);
-  const [position, setPosition] = useState({ x: window.innerWidth - 150, y: 20 });
-  const [isDragging, setIsDragging] = useState(false);
-  const dragOffset = useRef({ x: 0, y: 0 });
+  const [isMinimized, setIsMinimized] = useState(true);
 
   useEffect(() => {
     const updateTime = () => {
@@ -27,93 +27,66 @@ export const LocalClock: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (isMinimized) return;
-    setIsDragging(true);
-    dragOffset.current = {
-      x: e.clientX - position.x,
-      y: e.clientY - position.y
-    };
-  };
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging) return;
-      
-      const newX = Math.max(0, Math.min(window.innerWidth - (isMinimized ? 40 : 128), e.clientX - dragOffset.current.x));
-      const newY = Math.max(0, Math.min(window.innerHeight - (isMinimized ? 40 : 60), e.clientY - dragOffset.current.y));
-      
-      setPosition({ x: newX, y: newY });
-    };
-
-    const handleMouseUp = () => {
-      setIsDragging(false);
-    };
-
-    if (isDragging) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-    }
-
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDragging, isMinimized]);
-
-  if (!isVisible) return (
-    <button 
-      onClick={() => setIsVisible(true)}
-      className="fixed bottom-4 right-4 z-[100] w-10 h-10 bg-[#0a1a2f] border border-[#dcb06b] text-[#dcb06b] flex items-center justify-center clip-corner-sm hover:bg-[#dcb06b] hover:text-black transition-all shadow-[0_0_10px_rgba(220,176,107,0.3)]"
-    >
-      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-    </button>
-  );
-
-  return (
-    <div 
-      style={{ left: position.x, top: position.y }}
-      className={`fixed z-[100] transition-shadow duration-300 ${isDragging ? 'shadow-[0_0_20px_rgba(220,176,107,0.5)]' : 'shadow-xl'}`}
-    >
-      {isMinimized ? (
+  if (isMinimized) {
+    return (
+      <div className="fixed bottom-4 right-4 z-[2000] flex items-center gap-2">
+        {onOpenLuckySpin && (
+          <button 
+            onClick={onOpenLuckySpin}
+            className="w-10 h-10 bg-[#0a1a2f]/90 backdrop-blur-md border border-[#dcb06b] text-[#dcb06b] flex items-center justify-center clip-corner-sm hover:bg-[#dcb06b] hover:text-black transition-all shadow-[0_0_10px_rgba(220,176,107,0.3)] hover:scale-110"
+            title="Lucky Spin"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+        )}
         <button 
           onClick={() => setIsMinimized(false)}
-          className="w-10 h-10 bg-[#0a1a2f]/90 backdrop-blur-md border border-[#dcb06b] text-[#dcb06b] flex items-center justify-center clip-corner-sm hover:scale-110 transition-transform"
+          className="w-10 h-10 bg-[#0a1a2f]/90 backdrop-blur-md border border-[#dcb06b] text-[#dcb06b] flex items-center justify-center clip-corner-sm hover:bg-[#dcb06b] hover:text-black transition-all shadow-[0_0_10px_rgba(220,176,107,0.3)] hover:scale-110"
+          title="Expand Clock"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
         </button>
-      ) : (
-        <div className="w-32 bg-[#0a1a2f]/90 backdrop-blur-md border border-[#dcb06b]/50 clip-corner-sm flex flex-col overflow-hidden shadow-2xl">
-          {/* Draggable Header */}
-          <div 
-            onMouseDown={handleMouseDown}
-            className={`h-5 bg-[#dcb06b]/20 flex items-center justify-between px-2 cursor-move select-none border-b border-[#dcb06b]/30 ${isDragging ? 'bg-[#dcb06b]/40' : ''}`}
-          >
-            <div className="flex gap-1 items-center">
-               <div className="w-1 h-1 bg-[#dcb06b] rounded-full animate-pulse"></div>
-               <span className="text-[7px] font-orbitron font-bold text-[#dcb06b] tracking-tighter">LOCAL SYSTEM</span>
-            </div>
-            <div className="flex gap-1">
-              <button onClick={() => setIsMinimized(true)} className="text-[#dcb06b] hover:text-white">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" /></svg>
-              </button>
-              <button onClick={() => setIsVisible(false)} className="text-[#dcb06b] hover:text-red-500">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </div>
-          </div>
-          
-          {/* Time Display */}
-          <div className="p-2 flex flex-col items-center">
-             <div className="text-lg font-orbitron font-black text-white tracking-widest drop-shadow-[0_0_5px_rgba(255,255,255,0.3)]">
-                {time}
-             </div>
-             <div className="text-[6px] font-orbitron text-[#dcb06b] uppercase tracking-[0.2em] mt-0.5 opacity-60">
-                LOCAL TIME
-             </div>
-          </div>
-        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed bottom-4 right-4 z-[2000] flex items-center gap-2">
+      {onOpenLuckySpin && (
+        <button 
+          onClick={onOpenLuckySpin}
+          className="w-10 h-10 bg-[#0a1a2f]/90 backdrop-blur-md border border-[#dcb06b] text-[#dcb06b] flex items-center justify-center clip-corner-sm hover:bg-[#dcb06b] hover:text-black transition-all shadow-[0_0_10px_rgba(220,176,107,0.3)] hover:scale-110"
+          title="Lucky Spin"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+        </button>
       )}
+      <div className="w-32 bg-[#0a1a2f]/90 backdrop-blur-md border border-[#dcb06b]/50 clip-corner-sm flex flex-col overflow-hidden shadow-2xl">
+        {/* Header */}
+        <div className="h-5 bg-[#dcb06b]/20 flex items-center justify-between px-2 border-b border-[#dcb06b]/30">
+          <div className="flex gap-1 items-center">
+             <div className="w-1 h-1 bg-[#dcb06b] rounded-full animate-pulse"></div>
+             <span className="text-[7px] font-orbitron font-bold text-[#dcb06b] tracking-tighter">LOCAL SYSTEM</span>
+          </div>
+          <button onClick={() => setIsMinimized(true)} className="text-[#dcb06b] hover:text-white">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" /></svg>
+          </button>
+        </div>
+        
+        {/* Time Display */}
+        <div className="p-2 flex flex-col items-center relative">
+           <div className="text-lg font-orbitron font-black text-white tracking-widest drop-shadow-[0_0_5px_rgba(255,255,255,0.3)]">
+              {time}
+           </div>
+           <div className="text-[6px] font-orbitron text-[#dcb06b] uppercase tracking-[0.2em] mt-0.5 opacity-60">
+              LOCAL TIME
+           </div>
+        </div>
+      </div>
     </div>
   );
 };
