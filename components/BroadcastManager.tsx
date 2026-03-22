@@ -25,6 +25,12 @@ export const BroadcastManager: React.FC = () => {
   const [isMinimized, setIsMinimized] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
+  useEffect(() => {
+    const handleOpen = () => setIsOpen(true);
+    window.addEventListener('open-broadcast', handleOpen);
+    return () => window.removeEventListener('open-broadcast', handleOpen);
+  }, []);
+
   const startScreenShare = async () => {
     try {
       // Request high resolution and frame rate
@@ -309,21 +315,6 @@ export const BroadcastManager: React.FC = () => {
 
   return (
     <>
-      {/* Floating Button */}
-      {mode !== 'active' && (
-        <div className="fixed bottom-6 left-6 z-[200]">
-          <button 
-            onClick={() => setIsOpen(true)}
-            className="bg-[#0a1a2f]/90 border border-[#00d2ff] text-[#00d2ff] px-4 py-2 clip-corner-sm font-orbitron font-bold shadow-[0_0_15px_rgba(0,210,255,0.3)] hover:bg-[#00d2ff] hover:text-black transition-all flex items-center gap-2 backdrop-blur-sm"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-            </svg>
-            BROADCAST
-          </button>
-        </div>
-      )}
-
       {/* Main Modal */}
       {isOpen && mode !== 'active' && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">

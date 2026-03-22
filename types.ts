@@ -61,3 +61,27 @@ export interface MatchHistoryEntry extends MatchResult {
   mvpId?: string; // Track who was MVP in history
   ratings?: Record<string, number>; // 2 (Excellent), 1 (Good), -1 (Bad), -2 (Very Bad)
 }
+
+export interface OneVsOneMatch {
+  id: string;
+  player1: Player;
+  player2: Player;
+  hero1: string;
+  hero2: string;
+  winnerId: string;
+}
+
+export interface OneVsOneSession {
+  id: string;
+  playersQueue: Player[];
+  currentPlayer: Player | null;
+  nextPlayer: Player | null;
+  usedHeroes: string[];
+  matchHistory: OneVsOneMatch[];
+  allowRecall: boolean;
+  currentStreak: number;
+  status: 'picking' | 'battling' | 'finished';
+  currentHero1: string;
+  currentHero2: string;
+  currentRoomId: string;
+}

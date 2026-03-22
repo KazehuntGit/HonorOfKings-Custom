@@ -10,16 +10,17 @@ import { HistoryList } from './components/HistoryList';
 import { generateMatch, generateBracketMatch, validateBracketPool } from './utils/matchmaker';
 import { Button } from './components/Button';
 import { BackgroundParticles } from './components/BackgroundParticles';
-import { LocalClock } from './components/LocalClock';
+import { FloatingMenu } from './components/FloatingMenu';
 import { ConfirmModal } from './components/ConfirmModal';
 import { BracketDisplay } from './components/BracketDisplay';
 import { PreparingModal } from './components/PreparingModal';
 import { CookieConsent } from './components/CookieConsent';
 import { LuckySpinModal } from './components/LuckySpinModal';
 import { BroadcastManager } from './components/BroadcastManager';
+import { OneVsOneDisplay } from './components/OneVsOneDisplay';
 import { setCookie, getCookie, eraseCookie } from './utils/cookies';
 
-type ViewMode = 'lobby' | 'match' | 'battle' | 'bracket';
+type ViewMode = 'lobby' | 'match' | 'battle' | 'bracket' | 'onevsone';
 interface Toast { id: string; message: string; isExiting: boolean; }
 
 // Persistence Keys
@@ -74,10 +75,18 @@ export default function App() {
       } catch (e) { return null; }
   });
 
+  const [oneVsOneSession, setOneVsOneSession] = useState<any | null>(() => {
+      try {
+          const saved = getCookie('hok_active_1v1_session');
+          return saved ? JSON.parse(saved) : null;
+      } catch (e) { return null; }
+  });
+
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [roomId, setRoomId] = useState<string>('');
   const [isCoachMode, setIsCoachMode] = useState(false);
   const [isBracketMode, setIsBracketMode] = useState(false);
+  const [isOneVsOneMode, setIsOneVsOneMode] = useState(false);
   const [numBracketTeams, setNumBracketTeams] = useState(4);
   const [isSetupOpen, setIsSetupOpen] = useState(false);
   const [setupStep, setSetupStep] = useState<1 | 2 | 3>(1); // 1: Config, 2: Roster, 3: Launch
@@ -219,11 +228,20 @@ export default function App() {
       }
   }, [bracketMatch]);
 
-  const navigate = useCallback((mode: ViewMode, data: any) => {
-    setViewMode(mode);
+  useEffect(() => {
+      if (oneVsOneSession) {
+          setCookie('hok_active_1v1_session', JSON.stringify(oneVsOneSession), 1);
+      } else {
+          eraseCookie('hok_active_1v1_session');
+      }
+  }, [oneVsOneSession]);
+
+  const navigate = useCallback((mode: ViewMode | 'onevsone', data: any) => {
+    setViewMode(mode as any);
     if (mode === 'lobby' && Array.isArray(data)) setPlayers(data);
     else if ((mode === 'match' || mode === 'battle') && data) setCurrentMatch(data);
     else if (mode === 'bracket' && data) setBracketMatch(data);
+    else if (mode === 'onevsone' && data) setOneVsOneSession(data);
   }, []);
 
   const handleBackToLobby = () => {
@@ -235,10 +253,12 @@ export default function App() {
           setViewMode('match');
       } else if (bracketMatch) {
           setViewMode('bracket');
+      } else if (oneVsOneSession) {
+          setViewMode('onevsone' as any);
       }
   };
 
-  const hasActiveSession = !!currentMatch || !!bracketMatch;
+  const hasActiveSession = !!currentMatch || !!bracketMatch || !!oneVsOneSession;
 
   const dismissToast = (id: string) => {
       setToasts(prev => prev.map(t => t.id === id ? { ...t, isExiting: true } : t));
@@ -343,6 +363,7 @@ export default function App() {
     
     setCurrentMatch(null);
     setBracketMatch(null);
+    setOneVsOneSession(null);
     setErrorMsg(null);
     setIsPreparing(true);
     setPrepError(null);
@@ -353,11 +374,36 @@ export default function App() {
         setPrepMessage("SCANNING ACTIVE ROSTER...");
         await delay(800);
         
-        // Phase 1: Validation
-        setPrepMessage("VALIDATING ROLE COMPATIBILITY...");
-        await delay(500); // Short delay to let UI show this message
-        
-        if (isBracketMode) {
+        if (isOneVsOneMode) {
+            if (activePlayers.length < 2) throw new Error("INSUFFICIENT PLAYERS: Need at least 2 active players for 1v1.");
+            
+            setPrepMessage("INITIALIZING 1V1 SESSION...");
+            await delay(800);
+            
+            // Shuffle players for the queue
+            const shuffled = [...activePlayers].sort(() => 0.5 - Math.random());
+            const session: any = {
+                id: crypto.randomUUID(),
+                playersQueue: shuffled.slice(2),
+                currentPlayer: shuffled[0],
+                nextPlayer: shuffled[1],
+                usedHeroes: [],
+                matchHistory: [],
+                allowRecall: true,
+                currentStreak: 0,
+                status: 'picking',
+                currentHero1: '',
+                currentHero2: '',
+                currentRoomId: roomId
+            };
+            
+            setOneVsOneSession(session);
+            navigate('onevsone', session);
+            setIsSetupOpen(false);
+        } else if (isBracketMode) {
+            setPrepMessage("VALIDATING ROLE COMPATIBILITY...");
+            await delay(500); // Short delay to let UI show this message
+            
             const validation = validateBracketPool(activePlayers, numBracketTeams);
             if (!validation.valid) throw new Error(validation.error);
             
@@ -377,6 +423,9 @@ export default function App() {
                 throw new Error("UNABLE TO BALANCE TEAMS. Please check role distribution or add more flexible players."); 
             }
         } else {
+            setPrepMessage("VALIDATING ROLE COMPATIBILITY...");
+            await delay(500); // Short delay to let UI show this message
+            
             const required = isCoachMode ? 12 : 10;
             if (activePlayers.length < required) throw new Error(`INSUFFICIENT PLAYERS: Need ${required} active players.`);
             
@@ -534,18 +583,18 @@ export default function App() {
                         )}
 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                          <button onClick={() => !isBracketMode && setIsCoachMode(!isCoachMode)} className={`relative w-full group overflow-hidden p-[3px] clip-corner-sm transition-all duration-300 transform ${isBracketMode ? 'opacity-60 cursor-not-allowed' : 'hover:scale-[1.01] active:scale-[0.98]'}`}>
+                          <button onClick={() => !isBracketMode && !isOneVsOneMode && setIsCoachMode(!isCoachMode)} className={`relative w-full group overflow-hidden p-[3px] clip-corner-sm transition-all duration-300 transform ${(isBracketMode || isOneVsOneMode) ? 'opacity-60 cursor-not-allowed' : 'hover:scale-[1.01] active:scale-[0.98]'}`}>
                             {isCoachMode && <div className="absolute inset-[-100%] transition-opacity duration-700"><div className="absolute inset-0 bg-[conic-gradient(from_0deg,transparent_0deg,#dcb06b_60deg,#f3dcb1_120deg,transparent_180deg,#dcb06b_240deg,#f3dcb1_300deg,transparent_360deg)] animate-[spin_3s_linear_infinite]"></div></div>}
                             <div className={`relative z-10 py-4 px-6 flex items-center justify-center transition-all duration-300 clip-corner-sm border h-full ${isCoachMode ? 'bg-black text-[#dcb06b] border-transparent shadow-[inset_0_0_20px_rgba(220,176,107,0.5)]' : 'bg-[#0a1a2f]/80 border-[#1e3a5f] text-[#4a5f78]'}`}><span className={`font-cinzel font-black text-xs tracking-[0.3em] uppercase transition-all duration-500 ${isCoachMode ? 'text-white drop-shadow-[0_0_10px_#dcb06b]' : ''}`}>COACH MODE {isCoachMode ? 'ON' : 'OFF'}</span></div>
                           </button>
-                          <button onClick={() => { setIsBracketMode(!isBracketMode); if(!isBracketMode) setIsCoachMode(false); }} className="relative w-full group overflow-hidden p-[3px] clip-corner-sm transition-all duration-300 transform hover:scale-[1.01] active:scale-[0.98]">
+                          <button onClick={() => { setIsBracketMode(!isBracketMode); if(!isBracketMode) { setIsCoachMode(false); setIsOneVsOneMode(false); } }} className="relative w-full group overflow-hidden p-[3px] clip-corner-sm transition-all duration-300 transform hover:scale-[1.01] active:scale-[0.98]">
                             {isBracketMode && <div className="absolute inset-[-100%] transition-opacity duration-700"><div className="absolute inset-0 bg-[conic-gradient(from_0deg,transparent_0deg,#ffffff_60deg,#e2e8f0_120deg,transparent_180deg,#ffffff_240deg,#e2e8f0_300deg,transparent_360deg)] animate-[spin_3s_linear_infinite]"></div></div>}
                             <div className={`relative z-10 py-4 px-6 flex items-center justify-center transition-all duration-300 clip-corner-sm border h-full ${isBracketMode ? 'bg-black text-white border-transparent shadow-[inset_0_0_20px_rgba(255,255,255,0.4)]' : 'bg-[#0a1a2f]/80 border-[#1e3a5f] text-[#4a5f78]'}`}><span className={`font-cinzel font-black text-xs tracking-[0.3em] uppercase transition-all duration-500 ${isBracketMode ? 'text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.8)]' : ''}`}>BRACKET MODE {isBracketMode ? 'ON' : 'OFF'}</span></div>
                           </button>
-                          <button onClick={() => {}} className="relative w-full group overflow-hidden p-[3px] clip-corner-sm transition-all duration-300 transform opacity-60 cursor-not-allowed">
-                            <div className="relative z-10 py-4 px-6 flex flex-col items-center justify-center transition-all duration-300 clip-corner-sm border h-full bg-[#0a1a2f]/80 border-[#1e3a5f] text-[#4a5f78]">
-                              <span className="font-cinzel font-black text-xs tracking-[0.3em] uppercase">1v1 (BETA)</span>
-                              <span className="text-[8px] font-orbitron mt-1 text-[#dcb06b] tracking-widest">COMING SOON</span>
+                          <button onClick={() => { setIsOneVsOneMode(!isOneVsOneMode); if(!isOneVsOneMode) { setIsCoachMode(false); setIsBracketMode(false); } }} className="relative w-full group overflow-hidden p-[3px] clip-corner-sm transition-all duration-300 transform hover:scale-[1.01] active:scale-[0.98]">
+                            {isOneVsOneMode && <div className="absolute inset-[-100%] transition-opacity duration-700"><div className="absolute inset-0 bg-[conic-gradient(from_0deg,transparent_0deg,#ff4444_60deg,#ff8888_120deg,transparent_180deg,#ff4444_240deg,#ff8888_300deg,transparent_360deg)] animate-[spin_3s_linear_infinite]"></div></div>}
+                            <div className={`relative z-10 py-4 px-6 flex flex-col items-center justify-center transition-all duration-300 clip-corner-sm border h-full ${isOneVsOneMode ? 'bg-black text-white border-transparent shadow-[inset_0_0_20px_rgba(255,68,68,0.4)]' : 'bg-[#0a1a2f]/80 border-[#1e3a5f] text-[#4a5f78]'}`}>
+                              <span className={`font-cinzel font-black text-xs tracking-[0.3em] uppercase transition-all duration-500 ${isOneVsOneMode ? 'text-white drop-shadow-[0_0_10px_rgba(255,68,68,0.8)]' : ''}`}>1v1 MODE {isOneVsOneMode ? 'ON' : 'OFF'}</span>
                             </div>
                           </button>
                         </div>
@@ -632,7 +681,10 @@ export default function App() {
   return (
     <div className="min-h-screen text-slate-200 font-inter overflow-x-hidden relative flex flex-col">
       <BackgroundParticles />
-      <LocalClock onOpenLuckySpin={() => setIsLuckySpinOpen(true)} />
+      <FloatingMenu 
+        onOpenLuckySpin={() => setIsLuckySpinOpen(true)} 
+        onOpenBroadcast={() => window.dispatchEvent(new CustomEvent('open-broadcast'))} 
+      />
       <LuckySpinModal isOpen={isLuckySpinOpen} onClose={() => setIsLuckySpinOpen(false)} players={activePlayers} />
       
       <div className="fixed top-24 right-4 z-[3000] flex flex-col gap-2 pointer-events-none">
@@ -689,7 +741,7 @@ export default function App() {
                              <div className="text-left">
                                  <h3 className="text-[#dcb06b] font-cinzel font-bold text-xl tracking-widest">SESSION IN PROGRESS</h3>
                                  <p className="text-[#8a9db8] font-orbitron text-xs tracking-wide">
-                                     {currentMatch ? 'RANKED DRAFT • BATTLEFIELD' : 'TOURNAMENT BRACKET • MANAGEMENT'}
+                                     {currentMatch ? 'RANKED DRAFT • BATTLEFIELD' : bracketMatch ? 'TOURNAMENT BRACKET • MANAGEMENT' : '1v1 KING OF THE HILL'}
                                  </p>
                              </div>
                          </div>
@@ -781,6 +833,20 @@ export default function App() {
           onReroll={handleBracketReroll}
           onUpdatePlayer={handleUpdatePlayer}
         />
+      )}
+
+      {oneVsOneSession && viewMode === 'onevsone' && (
+        <div className="fixed inset-0 z-50 bg-[#05090f] overflow-hidden">
+          <OneVsOneDisplay 
+            session={oneVsOneSession}
+            onUpdateSession={setOneVsOneSession}
+            onEndSession={() => {
+              setOneVsOneSession(null);
+              eraseCookie('hok_active_1v1_session');
+              setViewMode('lobby');
+            }}
+          />
+        </div>
       )}
 
       <BroadcastManager />
