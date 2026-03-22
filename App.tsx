@@ -124,6 +124,34 @@ export default function App() {
     }
   }, [enableFullscreen]);
 
+  // --- AUTO ZOOM LOGIC ---
+  useEffect(() => {
+    const adjustZoom = () => {
+      const width = window.innerWidth;
+      const baseWidth = 1440; // Standard desktop width
+      
+      if (width < baseWidth && width > 768) {
+        // Calculate zoom level for smaller desktop/laptop screens
+        const zoomLevel = Math.max(0.6, width / baseWidth);
+        (document.body.style as any).zoom = zoomLevel.toString();
+      } else if (width <= 768) {
+        // For mobile/tablets, scale down further or let responsive CSS handle it
+        const zoomLevel = Math.max(0.5, width / 1024);
+        (document.body.style as any).zoom = zoomLevel.toString();
+      } else {
+        (document.body.style as any).zoom = '1';
+      }
+    };
+
+    window.addEventListener('resize', adjustZoom);
+    adjustZoom(); // Initial call
+
+    return () => {
+      window.removeEventListener('resize', adjustZoom);
+      (document.body.style as any).zoom = '1';
+    };
+  }, []);
+
   useEffect(() => {
       const activate = () => {
           enableFullscreen();

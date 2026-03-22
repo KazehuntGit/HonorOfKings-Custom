@@ -174,13 +174,74 @@ export const BroadcastManager: React.FC = () => {
     };
   }, [mode, stream, crop, windowSize, isMinimized, isFullscreen, activeSource]);
 
+  // Auto-adjust window size based on browser viewport
+  useEffect(() => {
+    const handleResize = () => {
+      if (isFullscreen || mode !== 'active') return;
+      
+      const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+      const viewportHeight = document.documentElement.clientHeight || window.innerHeight;
+      
+      const maxWidth = viewportWidth * 0.95; 
+      const maxHeight = viewportHeight * 0.85; 
+      
+      setWindowSize(prev => {
+        let newWidth = prev.width;
+        
+        // If current width is larger than viewport allows, scale down
+        if (newWidth > maxWidth) {
+          newWidth = maxWidth;
+        }
+        
+        // Also check height constraints (assuming roughly 16:9 aspect ratio)
+        const estimatedHeight = newWidth * (9/16) + 40; // +40 for header
+        if (estimatedHeight > maxHeight) {
+          newWidth = (maxHeight - 40) * (16/9);
+        }
+        
+        // Ensure minimum width
+        newWidth = Math.max(200, newWidth);
+        
+        if (newWidth !== prev.width) {
+          return { width: newWidth };
+        }
+        return prev;
+      });
+
+      // Adjust position to keep it on screen
+      setPosition(prev => {
+        let newX = prev.x;
+        let newY = prev.y;
+        
+        const currentWidth = windowSize.width > maxWidth ? maxWidth : windowSize.width;
+        const maxPosX = Math.max(0, viewportWidth - currentWidth);
+        const maxPosY = Math.max(0, viewportHeight - (currentWidth * (9/16) + 40));
+        
+        if (newX > maxPosX) newX = maxPosX;
+        if (newY > maxPosY) newY = maxPosY;
+        
+        if (newX !== prev.x || newY !== prev.y) {
+          return { x: newX, y: newY };
+        }
+        return prev;
+      });
+    };
+
+    window.addEventListener('resize', handleResize);
+    // Initial check
+    handleResize();
+    
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isFullscreen, mode, windowSize.width]);
+
   // Window Dragging Logic
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (isDraggingWindow && !isFullscreen) {
+        const zoomLevel = parseFloat((document.body.style as any).zoom) || 1;
         setPosition({
-          x: e.clientX - dragOffset.x,
-          y: e.clientY - dragOffset.y
+          x: (e.clientX - dragOffset.x) / zoomLevel,
+          y: (e.clientY - dragOffset.y) / zoomLevel
         });
       }
     };
@@ -199,17 +260,19 @@ export const BroadcastManager: React.FC = () => {
   const handleWindowDragStart = (e: React.MouseEvent) => {
     if (isFullscreen) return;
     setIsDraggingWindow(true);
+    const zoomLevel = parseFloat((document.body.style as any).zoom) || 1;
     setDragOffset({
-      x: e.clientX - position.x,
-      y: e.clientY - position.y
+      x: e.clientX - position.x * zoomLevel,
+      y: e.clientY - position.y * zoomLevel
     });
   };
 
   // Cropping Drag Logic
   const handleCropMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const zoomLevel = parseFloat((document.body.style as any).zoom) || 1;
+    const x = (e.clientX - rect.left) / zoomLevel;
+    const y = (e.clientY - rect.top) / zoomLevel;
     setStartPos({ x, y });
     setCurrentPos({ x, y });
     setIsDragging(true);
@@ -218,8 +281,9 @@ export const BroadcastManager: React.FC = () => {
   const handleCropMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!isDragging) return;
     const rect = e.currentTarget.getBoundingClientRect();
-    const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
-    const y = Math.max(0, Math.min(e.clientY - rect.top, rect.height));
+    const zoomLevel = parseFloat((document.body.style as any).zoom) || 1;
+    const x = Math.max(0, Math.min((e.clientX - rect.left) / zoomLevel, rect.width / zoomLevel));
+    const y = Math.max(0, Math.min((e.clientY - rect.top) / zoomLevel, rect.height / zoomLevel));
     setCurrentPos({ x, y });
   };
 
@@ -227,10 +291,14 @@ export const BroadcastManager: React.FC = () => {
     if (!isDragging) return;
     setIsDragging(false);
     const rect = e.currentTarget.getBoundingClientRect();
-    const x = Math.min(startPos.x, currentPos.x) / rect.width;
-    const y = Math.min(startPos.y, currentPos.y) / rect.height;
-    const w = Math.abs(currentPos.x - startPos.x) / rect.width;
-    const h = Math.abs(currentPos.y - startPos.y) / rect.height;
+    const zoomLevel = parseFloat((document.body.style as any).zoom) || 1;
+    const rectWidth = rect.width / zoomLevel;
+    const rectHeight = rect.height / zoomLevel;
+    
+    const x = Math.min(startPos.x, currentPos.x) / rectWidth;
+    const y = Math.min(startPos.y, currentPos.y) / rectHeight;
+    const w = Math.abs(currentPos.x - startPos.x) / rectWidth;
+    const h = Math.abs(currentPos.y - startPos.y) / rectHeight;
 
     if (w > 0.05 && h > 0.05) {
       setCrop({ x, y, w, h });
@@ -462,9 +530,12 @@ export const BroadcastManager: React.FC = () => {
                   e.stopPropagation();
                   const startX = e.clientX;
                   const startWidth = windowSize.width;
+                  const zoomLevel = parseFloat((document.body.style as any).zoom) || 1;
+                  const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
                   
                   const handleResizeMove = (moveEvent: MouseEvent) => {
-                    const newWidth = Math.max(200, Math.min(startWidth + (moveEvent.clientX - startX), window.innerWidth - position.x - 20));
+                    const deltaX = (moveEvent.clientX - startX) / zoomLevel;
+                    const newWidth = Math.max(200, Math.min(startWidth + deltaX, viewportWidth - position.x - 20));
                     setWindowSize({ width: newWidth });
                   };
                   
